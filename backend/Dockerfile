@@ -1,11 +1,13 @@
-# 构建阶段
-FROM golang:1.21-alpine AS builder
+# 构建阶段 - 使用 Debian-based 镜像避免 musl 兼容性问题
+FROM golang:1.21-bookworm AS builder
 
 # 设置工作目录
 WORKDIR /app
 
-# 安装必要的构建工具（包括 sqlite-dev 用于静态编译）
-RUN apk add --no-cache gcc musl-dev sqlite-dev
+# 安装必要的构建工具
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc libc6-dev libsqlite3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # 设置 Go 模块代理（国内加速）
 ENV GOPROXY=https://goproxy.cn,direct
@@ -19,21 +21,23 @@ COPY . .
 # 下载依赖并更新 go.sum
 RUN go mod tidy
 
-# 构建应用（动态链接，避免 SQLite 静态编译问题）
+# 构建应用
 RUN CGO_ENABLED=1 GOOS=linux go build -o finance-server .
 
 # 运行阶段
-FROM alpine:3.19
+FROM debian:bookworm-slim
 
 # 安装运行时依赖
-RUN apk --no-cache add ca-certificates tzdata sqlite-libs
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates tzdata libsqlite3-0 wget \
+    && rm -rf /var/lib/apt/lists/*
 
 # 设置时区
 ENV TZ=Asia/Shanghai
 
 # 创建非 root 用户
-RUN addgroup -g 1000 finance && \
-    adduser -u 1000 -G finance -s /bin/sh -D finance
+RUN groupadd -g 1000 finance && \
+    useradd -u 1000 -g finance -s /bin/sh -m finance
 
 # 设置工作目录
 WORKDIR /app
