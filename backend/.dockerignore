@@ -1,0 +1,28 @@
+# 忽略文件
+.git
+.gitignore
+.idea
+*.md
+Dockerfile
+.dockerignore
+
+# 测试文件
+*_test.go
+**/*_test.go
+
+# 本地数据
+data/
+*.db
+*.sqlite
+
+# 日志
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# 临时文件
+*.tmp
+*.swp

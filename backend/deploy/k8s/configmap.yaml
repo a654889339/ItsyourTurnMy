@@ -1,0 +1,52 @@
+# ConfigMap - 应用配置
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: finance-config
+  namespace: finance-system
+  labels:
+    app: finance
+data:
+  config.yaml: |
+    server:
+      http_port: 8080
+      grpc_port: 9090
+      mode: release
+      read_timeout: 30
+      write_timeout: 30
+
+    database:
+      driver: mysql
+      mysql:
+        host: ${MYSQL_HOST}
+        port: 3306
+        username: ${MYSQL_USER}
+        password: ${MYSQL_PASSWORD}
+        database: ${MYSQL_DATABASE}
+        charset: utf8mb4
+        max_idle_conns: 10
+        max_open_conns: 100
+
+    jwt:
+      secret: ${JWT_SECRET}
+      expire_hours: 24
+      issuer: finance-system
+
+    log:
+      level: info
+      format: json
+      output: stdout
+
+    cors:
+      allowed_origins:
+        - "*"
+      allowed_methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - OPTIONS
+      allowed_headers:
+        - Content-Type
+        - Authorization
+      allow_credentials: true

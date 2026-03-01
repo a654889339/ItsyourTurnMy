@@ -1,0 +1,52 @@
+# 依赖目录
+node_modules/
+vendor/
+
+# 构建输出
+dist/
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 数据文件
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# 日志文件
+logs/
+*.log
+
+# 环境变量和敏感信息
+.env
+.env.local
+.env.*.local
+*.pem
+server.env
+
+# IDE 和编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.temp
+*.bak
+
+# Go
+go.sum
+
+# 测试覆盖率
+coverage/
+*.cover
+*.out

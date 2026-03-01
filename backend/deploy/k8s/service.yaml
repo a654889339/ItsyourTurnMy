@@ -1,0 +1,52 @@
+# Service - 服务暴露配置
+apiVersion: v1
+kind: Service
+metadata:
+  name: finance-backend
+  namespace: finance-system
+  labels:
+    app: finance
+    component: backend
+spec:
+  type: ClusterIP
+  selector:
+    app: finance
+    component: backend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+    - name: grpc
+      port: 9090
+      targetPort: grpc
+      protocol: TCP
+
+---
+# LoadBalancer Service - 外部访问 (腾讯云 CLB)
+apiVersion: v1
+kind: Service
+metadata:
+  name: finance-backend-lb
+  namespace: finance-system
+  labels:
+    app: finance
+    component: backend
+  annotations:
+    # 腾讯云 CLB 注解
+    # 使用已有的 CLB 实例
+    # service.kubernetes.io/tke-existed-lbid: "lb-xxxxxxxx"
+    # 指定 CLB 网络类型: OPEN (公网), INTERNAL (内网)
+    service.kubernetes.io/qcloud-loadbalancer-internal-subnetid: ""
+    # 带宽上限 (Mbps)
+    # service.kubernetes.io/qcloud-loadbalancer-internet-max-bandwidth-out: "100"
+spec:
+  type: LoadBalancer
+  selector:
+    app: finance
+    component: backend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP

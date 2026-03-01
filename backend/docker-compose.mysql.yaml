@@ -1,0 +1,91 @@
+# Docker Compose 配置文件 - MySQL 版本
+# 适用于需要使用 MySQL 数据库的生产环境
+
+version: '3.8'
+
+services:
+  # 后端服务
+  finance-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: finance-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # 服务配置
+      - HTTP_PORT=8080
+      - SERVER_MODE=release
+      # 数据库配置 (使用 MySQL)
+      - DB_DRIVER=mysql
+      - MYSQL_HOST=finance-mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=finance
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-financepassword}
+      - MYSQL_DATABASE=finance
+      # JWT 配置
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-key-change-me}
+      - JWT_EXPIRE_HOURS=24
+      # 日志配置
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+      # CORS 配置
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+    depends_on:
+      finance-mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - finance-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # MySQL 服务
+  finance-mysql:
+    image: mysql:8.0
+    container_name: finance-mysql
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-rootpassword}
+      - MYSQL_DATABASE=finance
+      - MYSQL_USER=finance
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-financepassword}
+      - MYSQL_CHARSET=utf8mb4
+      - MYSQL_COLLATION=utf8mb4_unicode_ci
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - finance-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  finance-network:
+    driver: bridge

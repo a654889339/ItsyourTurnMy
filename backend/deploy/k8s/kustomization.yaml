@@ -1,0 +1,28 @@
+# Kustomize 配置文件
+# 使用方法: kubectl apply -k deploy/k8s/
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: finance-system
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - hpa.yaml
+  # 如需部署 MySQL 到 K8s，取消下面注释
+  # - mysql-statefulset.yaml
+
+# 通用标签
+commonLabels:
+  app: finance
+  managed-by: kustomize
+
+# 镜像配置 (可通过命令行覆盖)
+images:
+  - name: ccr.ccs.tencentyun.com/finance/finance-backend
+    newTag: latest

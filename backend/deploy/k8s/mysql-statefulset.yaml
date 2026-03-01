@@ -1,0 +1,136 @@
+# MySQL StatefulSet - 数据库部署配置
+# 注意: 生产环境建议使用腾讯云 TencentDB for MySQL
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc
+  namespace: finance-system
+  labels:
+    app: finance
+    component: mysql
+spec:
+  accessModes:
+    - ReadWriteOnce
+  # 腾讯云 CBS 存储类
+  storageClassName: cbs-ssd
+  resources:
+    requests:
+      storage: 20Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: finance-mysql
+  namespace: finance-system
+  labels:
+    app: finance
+    component: mysql
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: finance
+    component: mysql
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: 3306
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: finance-mysql
+  namespace: finance-system
+  labels:
+    app: finance
+    component: mysql
+spec:
+  serviceName: finance-mysql
+  replicas: 1
+  selector:
+    matchLabels:
+      app: finance
+      component: mysql
+  template:
+    metadata:
+      labels:
+        app: finance
+        component: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          ports:
+            - name: mysql
+              containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secrets
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              value: finance
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: finance-secrets
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: finance-secrets
+                  key: MYSQL_PASSWORD
+          args:
+            - --character-set-server=utf8mb4
+            - --collation-server=utf8mb4_unicode_ci
+            - --default-authentication-plugin=mysql_native_password
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+          livenessProbe:
+            exec:
+              command:
+                - mysqladmin
+                - ping
+                - -h
+                - localhost
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - mysqladmin
+                - ping
+                - -h
+                - localhost
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 1
+      volumes:
+        - name: mysql-data
+          persistentVolumeClaim:
+            claimName: mysql-pvc
+
+---
+# MySQL Root 密码 Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-secrets
+  namespace: finance-system
+type: Opaque
+data:
+  # echo -n 'your-root-password' | base64
+  MYSQL_ROOT_PASSWORD: eW91ci1yb290LXBhc3N3b3Jk

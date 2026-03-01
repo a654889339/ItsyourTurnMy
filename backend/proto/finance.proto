@@ -1,0 +1,382 @@
+syntax = "proto3";
+
+package finance;
+
+option go_package = "finance-system/pb";
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// ==================== 通用消息 ====================
+
+message ErrorResponse {
+  int32 code = 1;
+  string message = 2;
+}
+
+// ==================== 用户认证 ====================
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  string token = 1;
+  User user = 2;
+}
+
+message RegisterRequest {
+  string username = 1;
+  string password = 2;
+  string email = 3;
+}
+
+message User {
+  int64 id = 1;
+  string username = 2;
+  string email = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+message GetUserRequest {
+  int64 id = 1;
+}
+
+// ==================== 账户管理 ====================
+
+message Account {
+  int64 id = 1;
+  int64 user_id = 2;
+  string name = 3;
+  string type = 4;  // cash, bank, credit, investment
+  double balance = 5;
+  string currency = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message CreateAccountRequest {
+  string name = 1;
+  string type = 2;
+  double initial_balance = 3;
+  string currency = 4;
+}
+
+message UpdateAccountRequest {
+  int64 id = 1;
+  string name = 2;
+  string type = 3;
+}
+
+message DeleteAccountRequest {
+  int64 id = 1;
+}
+
+message GetAccountRequest {
+  int64 id = 1;
+}
+
+message ListAccountsRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+}
+
+message ListAccountsResponse {
+  repeated Account accounts = 1;
+  int32 total = 2;
+}
+
+// ==================== 收支记录 ====================
+
+message Transaction {
+  int64 id = 1;
+  int64 user_id = 2;
+  int64 account_id = 3;
+  string type = 4;  // income, expense, transfer
+  double amount = 5;
+  int64 category_id = 6;
+  string category_name = 7;
+  string description = 8;
+  google.protobuf.Timestamp transaction_date = 9;
+  google.protobuf.Timestamp created_at = 10;
+}
+
+message CreateTransactionRequest {
+  int64 account_id = 1;
+  string type = 2;
+  double amount = 3;
+  int64 category_id = 4;
+  string description = 5;
+  string transaction_date = 6;  // YYYY-MM-DD
+}
+
+message UpdateTransactionRequest {
+  int64 id = 1;
+  int64 account_id = 2;
+  string type = 3;
+  double amount = 4;
+  int64 category_id = 5;
+  string description = 6;
+  string transaction_date = 7;
+}
+
+message DeleteTransactionRequest {
+  int64 id = 1;
+}
+
+message GetTransactionRequest {
+  int64 id = 1;
+}
+
+message ListTransactionsRequest {
+  int64 account_id = 1;  // 可选，筛选特定账户
+  string type = 2;       // 可选，筛选类型
+  string start_date = 3; // 可选，开始日期
+  string end_date = 4;   // 可选，结束日期
+  int32 page = 5;
+  int32 page_size = 6;
+}
+
+message ListTransactionsResponse {
+  repeated Transaction transactions = 1;
+  int32 total = 2;
+}
+
+// ==================== 分类管理 ====================
+
+message Category {
+  int64 id = 1;
+  int64 user_id = 2;
+  string name = 3;
+  string type = 4;  // income, expense
+  string icon = 5;
+  string color = 6;
+}
+
+message CreateCategoryRequest {
+  string name = 1;
+  string type = 2;
+  string icon = 3;
+  string color = 4;
+}
+
+message UpdateCategoryRequest {
+  int64 id = 1;
+  string name = 2;
+  string icon = 3;
+  string color = 4;
+}
+
+message DeleteCategoryRequest {
+  int64 id = 1;
+}
+
+message ListCategoriesRequest {
+  string type = 1;  // 可选，筛选类型
+}
+
+message ListCategoriesResponse {
+  repeated Category categories = 1;
+}
+
+// ==================== 报表统计 ====================
+
+message StatsSummary {
+  double total_income = 1;
+  double total_expense = 2;
+  double balance = 3;
+}
+
+message GetStatsRequest {
+  string start_date = 1;
+  string end_date = 2;
+}
+
+message GetStatsResponse {
+  StatsSummary summary = 1;
+  repeated CategoryStats category_stats = 2;
+  repeated DailyStats daily_stats = 3;
+}
+
+message CategoryStats {
+  int64 category_id = 1;
+  string category_name = 2;
+  string type = 3;
+  double amount = 4;
+  double percentage = 5;
+}
+
+message DailyStats {
+  string date = 1;
+  double income = 2;
+  double expense = 3;
+}
+
+message GetMonthlyReportRequest {
+  int32 year = 1;
+  int32 month = 2;
+}
+
+message MonthlyReport {
+  int32 year = 1;
+  int32 month = 2;
+  StatsSummary summary = 3;
+  repeated CategoryStats income_by_category = 4;
+  repeated CategoryStats expense_by_category = 5;
+  repeated DailyStats daily_stats = 6;
+}
+
+// ==================== 服务定义 ====================
+
+service AuthService {
+  // 用户登录
+  rpc Login(LoginRequest) returns (LoginResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/login"
+      body: "*"
+    };
+  }
+
+  // 用户注册
+  rpc Register(RegisterRequest) returns (User) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/register"
+      body: "*"
+    };
+  }
+
+  // 获取当前用户信息
+  rpc GetCurrentUser(google.protobuf.Empty) returns (User) {
+    option (google.api.http) = {
+      get: "/api/v1/auth/me"
+    };
+  }
+}
+
+service AccountService {
+  // 创建账户
+  rpc CreateAccount(CreateAccountRequest) returns (Account) {
+    option (google.api.http) = {
+      post: "/api/v1/accounts"
+      body: "*"
+    };
+  }
+
+  // 获取账户
+  rpc GetAccount(GetAccountRequest) returns (Account) {
+    option (google.api.http) = {
+      get: "/api/v1/accounts/{id}"
+    };
+  }
+
+  // 更新账户
+  rpc UpdateAccount(UpdateAccountRequest) returns (Account) {
+    option (google.api.http) = {
+      put: "/api/v1/accounts/{id}"
+      body: "*"
+    };
+  }
+
+  // 删除账户
+  rpc DeleteAccount(DeleteAccountRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/accounts/{id}"
+    };
+  }
+
+  // 账户列表
+  rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/accounts"
+    };
+  }
+}
+
+service TransactionService {
+  // 创建交易记录
+  rpc CreateTransaction(CreateTransactionRequest) returns (Transaction) {
+    option (google.api.http) = {
+      post: "/api/v1/transactions"
+      body: "*"
+    };
+  }
+
+  // 获取交易记录
+  rpc GetTransaction(GetTransactionRequest) returns (Transaction) {
+    option (google.api.http) = {
+      get: "/api/v1/transactions/{id}"
+    };
+  }
+
+  // 更新交易记录
+  rpc UpdateTransaction(UpdateTransactionRequest) returns (Transaction) {
+    option (google.api.http) = {
+      put: "/api/v1/transactions/{id}"
+      body: "*"
+    };
+  }
+
+  // 删除交易记录
+  rpc DeleteTransaction(DeleteTransactionRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/transactions/{id}"
+    };
+  }
+
+  // 交易记录列表
+  rpc ListTransactions(ListTransactionsRequest) returns (ListTransactionsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/transactions"
+    };
+  }
+}
+
+service CategoryService {
+  // 创建分类
+  rpc CreateCategory(CreateCategoryRequest) returns (Category) {
+    option (google.api.http) = {
+      post: "/api/v1/categories"
+      body: "*"
+    };
+  }
+
+  // 更新分类
+  rpc UpdateCategory(UpdateCategoryRequest) returns (Category) {
+    option (google.api.http) = {
+      put: "/api/v1/categories/{id}"
+      body: "*"
+    };
+  }
+
+  // 删除分类
+  rpc DeleteCategory(DeleteCategoryRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/categories/{id}"
+    };
+  }
+
+  // 分类列表
+  rpc ListCategories(ListCategoriesRequest) returns (ListCategoriesResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/categories"
+    };
+  }
+}
+
+service ReportService {
+  // 获取统计概览
+  rpc GetStats(GetStatsRequest) returns (GetStatsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/reports/stats"
+    };
+  }
+
+  // 获取月度报表
+  rpc GetMonthlyReport(GetMonthlyReportRequest) returns (MonthlyReport) {
+    option (google.api.http) = {
+      get: "/api/v1/reports/monthly"
+    };
+  }
+}
