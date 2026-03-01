@@ -10,14 +10,14 @@ RUN apk add --no-cache gcc musl-dev
 # 设置 Go 模块代理（国内加速）
 ENV GOPROXY=https://goproxy.cn,direct
 
-# 复制 go.mod 和 go.sum
-COPY go.mod go.sum ./
-
-# 下载依赖
-RUN go mod download
+# 复制 go.mod
+COPY go.mod ./
 
 # 复制源代码
 COPY . .
+
+# 下载依赖并更新 go.sum
+RUN go mod tidy
 
 # 构建应用
 RUN CGO_ENABLED=1 GOOS=linux go build -a -ldflags '-linkmode external -extldflags "-static"' -o finance-server .
