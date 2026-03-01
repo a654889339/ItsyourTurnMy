@@ -1016,9 +1016,15 @@ func handleUploadImage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// 如果是完整 URL（COS），直接返回；否则加上 /uploads/ 前缀
+		imageURL := imagePath
+		if !strings.HasPrefix(imagePath, "http://") && !strings.HasPrefix(imagePath, "https://") {
+			imageURL = "/uploads/" + imagePath
+		}
+
 		jsonResponse(w, map[string]string{
 			"path": imagePath,
-			"url":  "/uploads/" + imagePath,
+			"url":  imageURL,
 		})
 	} else {
 		// 处理 Base64 上传
@@ -1041,9 +1047,15 @@ func handleUploadImage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// 如果是完整 URL（COS），直接返回；否则加上 /uploads/ 前缀
+		imageURL := imagePath
+		if !strings.HasPrefix(imagePath, "http://") && !strings.HasPrefix(imagePath, "https://") {
+			imageURL = "/uploads/" + imagePath
+		}
+
 		jsonResponse(w, map[string]string{
 			"path": imagePath,
-			"url":  "/uploads/" + imagePath,
+			"url":  imageURL,
 		})
 	}
 }
