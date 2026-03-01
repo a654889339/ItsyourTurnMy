@@ -1,0 +1,57 @@
+# Docker Compose 配置 - 前后端完整部署
+version: '3.8'
+
+services:
+  # 后端服务
+  finance-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: finance-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    environment:
+      - HTTP_PORT=8080
+      - GRPC_PORT=9090
+      - SERVER_MODE=release
+      - DB_DRIVER=sqlite
+      - SQLITE_PATH=/app/data/finance.db
+      - JWT_SECRET=${JWT_SECRET:-finance-system-jwt-secret-2024}
+      - JWT_EXPIRE_HOURS=24
+      - LOG_LEVEL=info
+      - CORS_ORIGINS=*
+    volumes:
+      - finance_data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - finance-network
+
+  # 前端服务
+  finance-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: finance-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      finance-backend:
+        condition: service_healthy
+    networks:
+      - finance-network
+
+volumes:
+  finance_data:
+    driver: local
+
+networks:
+  finance-network:
+    driver: bridge
