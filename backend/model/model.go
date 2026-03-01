@@ -72,3 +72,47 @@ type DailyStats struct {
 	Income  float64 `json:"income"`
 	Expense float64 `json:"expense"`
 }
+
+// ==================== 点菜功能模型 ====================
+
+// Dish 菜品模型
+type Dish struct {
+	ID          int64     `json:"id"`
+	UserID      int64     `json:"user_id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Price       float64   `json:"price"`
+	Image       string    `json:"image"`
+	Category    string    `json:"category"`     // 菜品分类：荤菜、素菜、汤类、主食、饮品等
+	DietaryTags string    `json:"dietary_tags"` // 饮食偏好标签：辣、素食、清真、无麸质等
+	Stock       int       `json:"stock"`        // 库存数量，-1表示不限
+	Status      string    `json:"status"`       // available, sold_out, disabled
+	SortOrder   int       `json:"sort_order"`   // 排序顺序
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// Order 点餐订单模型
+type Order struct {
+	ID         int64       `json:"id"`
+	UserID     int64       `json:"user_id"`
+	OrderNo    string      `json:"order_no"`    // 订单编号
+	TotalPrice float64     `json:"total_price"` // 订单总价
+	Status     string      `json:"status"`      // pending, confirmed, preparing, completed, cancelled
+	Remark     string      `json:"remark"`      // 订单备注
+	Items      []OrderItem `json:"items"`       // 订单项
+	CreatedAt  time.Time   `json:"created_at"`
+	UpdatedAt  time.Time   `json:"updated_at"`
+}
+
+// OrderItem 订单项模型
+type OrderItem struct {
+	ID        int64   `json:"id"`
+	OrderID   int64   `json:"order_id"`
+	DishID    int64   `json:"dish_id"`
+	DishName  string  `json:"dish_name"`
+	DishImage string  `json:"dish_image"`
+	Price     float64 `json:"price"`    // 下单时的价格
+	Quantity  int     `json:"quantity"` // 数量
+	Remark    string  `json:"remark"`   // 单项备注（如：少辣、多葱等）
+}

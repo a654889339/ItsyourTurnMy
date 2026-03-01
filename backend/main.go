@@ -26,6 +26,9 @@ var (
 	categoryService    *service.CategoryService
 	reportService      *service.ReportService
 	emailService       *service.EmailService
+	dishService        *service.DishService
+	orderService       *service.OrderService
+	uploadService      *service.UploadService
 )
 
 func main() {
@@ -105,6 +108,9 @@ func main() {
 	categoryService = service.NewCategoryService()
 	reportService = service.NewReportService()
 	emailService = service.NewEmailService(&cfg.Email)
+	dishService = service.NewDishService()
+	orderService = service.NewOrderService(dishService)
+	uploadService = service.NewUploadService("./uploads", "")
 
 	// 创建路由
 	mux := http.NewServeMux()
@@ -134,6 +140,21 @@ func main() {
 	// 报表相关
 	mux.HandleFunc("/api/v1/reports/stats", authMiddleware(handleStats))
 	mux.HandleFunc("/api/v1/reports/monthly", authMiddleware(handleMonthlyReport))
+
+	// 菜品管理
+	mux.HandleFunc("/api/v1/dishes", authMiddleware(handleDishes))
+	mux.HandleFunc("/api/v1/dishes/", authMiddleware(handleDishByID))
+	mux.HandleFunc("/api/v1/dishes/categories", authMiddleware(handleDishCategories))
+
+	// 订单管理
+	mux.HandleFunc("/api/v1/orders", authMiddleware(handleOrders))
+	mux.HandleFunc("/api/v1/orders/", authMiddleware(handleOrderByID))
+
+	// 图片上传
+	mux.HandleFunc("/api/v1/upload/image", authMiddleware(handleUploadImage))
+
+	// 静态文件服务（图片访问）
+	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))
 
 	// 启用CORS
 	handler := corsMiddleware(mux, cfg)
@@ -737,4 +758,292 @@ func handleMonthlyReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResponse(w, report)
+}
+
+// ==================== 菜品管理处理 ====================
+
+func handleDishes(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+
+	switch r.Method {
+	case "GET":
+		category := r.URL.Query().Get("category")
+		status := r.URL.Query().Get("status")
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
+
+		dishes, total, err := dishService.ListDishes(r.Context(), userID, category, status, page, pageSize)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		jsonResponse(w, map[string]interface{}{
+			"dishes": dishes,
+			"total":  total,
+		})
+
+	case "POST":
+		var req service.CreateDishReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonError(w, "无效的请求", http.StatusBadRequest)
+			return
+		}
+
+		if req.Name == "" {
+			jsonError(w, "菜品名称不能为空", http.StatusBadRequest)
+			return
+		}
+		if req.Price <= 0 {
+			jsonError(w, "菜品价格必须大于0", http.StatusBadRequest)
+			return
+		}
+
+		dish, err := dishService.CreateDish(r.Context(), userID, &req)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		jsonResponse(w, dish)
+
+	default:
+		jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+	}
+}
+
+func handleDishByID(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+
+	// 处理 /api/v1/dishes/categories 路由
+	if strings.HasSuffix(r.URL.Path, "/categories") {
+		handleDishCategories(w, r)
+		return
+	}
+
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/v1/dishes/")
+	dishID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		jsonError(w, "无效的菜品ID", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case "GET":
+		dish, err := dishService.GetDish(r.Context(), userID, dishID)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		jsonResponse(w, dish)
+
+	case "PUT":
+		var req service.UpdateDishReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonError(w, "无效的请求", http.StatusBadRequest)
+			return
+		}
+
+		dish, err := dishService.UpdateDish(r.Context(), userID, dishID, &req)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		jsonResponse(w, dish)
+
+	case "DELETE":
+		if err := dishService.DeleteDish(r.Context(), userID, dishID); err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		jsonResponse(w, map[string]string{"message": "删除成功"})
+
+	default:
+		jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+	}
+}
+
+func handleDishCategories(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserID(r)
+	categories, err := dishService.GetDishCategories(r.Context(), userID)
+	if err != nil {
+		jsonError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	jsonResponse(w, map[string]interface{}{
+		"categories": categories,
+	})
+}
+
+// ==================== 订单管理处理 ====================
+
+func handleOrders(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+
+	switch r.Method {
+	case "GET":
+		status := r.URL.Query().Get("status")
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
+
+		orders, total, err := orderService.ListOrders(r.Context(), userID, status, page, pageSize)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		jsonResponse(w, map[string]interface{}{
+			"orders": orders,
+			"total":  total,
+		})
+
+	case "POST":
+		var req service.CreateOrderReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonError(w, "无效的请求", http.StatusBadRequest)
+			return
+		}
+
+		order, err := orderService.CreateOrder(r.Context(), userID, &req)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		jsonResponse(w, order)
+
+	default:
+		jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+	}
+}
+
+func handleOrderByID(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/v1/orders/")
+
+	// 处理 /api/v1/orders/{id}/status
+	if strings.Contains(idStr, "/status") {
+		parts := strings.Split(idStr, "/")
+		orderID, err := strconv.ParseInt(parts[0], 10, 64)
+		if err != nil {
+			jsonError(w, "无效的订单ID", http.StatusBadRequest)
+			return
+		}
+
+		if r.Method == "PUT" {
+			var req struct {
+				Status string `json:"status"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				jsonError(w, "无效的请求", http.StatusBadRequest)
+				return
+			}
+
+			if err := orderService.UpdateOrderStatus(r.Context(), userID, orderID, req.Status); err != nil {
+				jsonError(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			jsonResponse(w, map[string]string{"message": "状态更新成功"})
+			return
+		}
+
+		jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orderID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		jsonError(w, "无效的订单ID", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case "GET":
+		order, err := orderService.GetOrder(r.Context(), userID, orderID)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		jsonResponse(w, order)
+
+	case "DELETE":
+		if err := orderService.DeleteOrder(r.Context(), userID, orderID); err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		jsonResponse(w, map[string]string{"message": "删除成功"})
+
+	default:
+		jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+	}
+}
+
+// ==================== 图片上传处理 ====================
+
+func handleUploadImage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 检查 Content-Type
+	contentType := r.Header.Get("Content-Type")
+
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		// 处理文件上传
+		r.ParseMultipartForm(10 << 20) // 10 MB
+
+		file, header, err := r.FormFile("image")
+		if err != nil {
+			jsonError(w, "请选择要上传的图片", http.StatusBadRequest)
+			return
+		}
+		defer file.Close()
+
+		imagePath, err := uploadService.UploadImage(file, header)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		jsonResponse(w, map[string]string{
+			"path": imagePath,
+			"url":  "/uploads/" + imagePath,
+		})
+	} else {
+		// 处理 Base64 上传
+		var req struct {
+			Image string `json:"image"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonError(w, "无效的请求", http.StatusBadRequest)
+			return
+		}
+
+		if req.Image == "" {
+			jsonError(w, "图片数据不能为空", http.StatusBadRequest)
+			return
+		}
+
+		imagePath, err := uploadService.UploadBase64Image(req.Image)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		jsonResponse(w, map[string]string{
+			"path": imagePath,
+			"url":  "/uploads/" + imagePath,
+		})
+	}
 }

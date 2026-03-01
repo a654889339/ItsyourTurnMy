@@ -124,6 +124,65 @@ const api = {
 
   getMonthlyReport(year, month) {
     return instance.get('/reports/monthly', { params: { year, month } })
+  },
+
+  // 菜品相关
+  getDishes(params = {}) {
+    return instance.get('/dishes', { params })
+  },
+
+  getDish(id) {
+    return instance.get(`/dishes/${id}`)
+  },
+
+  createDish(data) {
+    return instance.post('/dishes', data)
+  },
+
+  updateDish(id, data) {
+    return instance.put(`/dishes/${id}`, data)
+  },
+
+  deleteDish(id) {
+    return instance.delete(`/dishes/${id}`)
+  },
+
+  getDishCategories() {
+    return instance.get('/dishes/categories')
+  },
+
+  // 订单相关
+  getOrders(params = {}) {
+    return instance.get('/orders', { params })
+  },
+
+  getOrder(id) {
+    return instance.get(`/orders/${id}`)
+  },
+
+  createOrder(data) {
+    return instance.post('/orders', data)
+  },
+
+  updateOrderStatus(id, status) {
+    return instance.put(`/orders/${id}/status`, { status })
+  },
+
+  deleteOrder(id) {
+    return instance.delete(`/orders/${id}`)
+  },
+
+  // 上传相关
+  uploadImage(file) {
+    const formData = new FormData()
+    formData.append('image', file)
+    return instance.post('/upload/image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+
+  uploadBase64Image(base64Data) {
+    return instance.post('/upload/image', { image: base64Data })
   }
 }
 

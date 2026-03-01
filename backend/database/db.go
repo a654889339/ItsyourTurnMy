@@ -77,12 +77,59 @@ func createTables() error {
 			FOREIGN KEY (account_id) REFERENCES accounts(id),
 			FOREIGN KEY (category_id) REFERENCES categories(id)
 		)`,
+		// 菜品表
+		`CREATE TABLE IF NOT EXISTS dishes (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			name TEXT NOT NULL,
+			description TEXT DEFAULT '',
+			price REAL NOT NULL,
+			image TEXT DEFAULT '',
+			category TEXT DEFAULT '',
+			dietary_tags TEXT DEFAULT '',
+			stock INTEGER DEFAULT -1,
+			status TEXT DEFAULT 'available',
+			sort_order INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id)
+		)`,
+		// 订单表
+		`CREATE TABLE IF NOT EXISTS orders (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			order_no TEXT UNIQUE NOT NULL,
+			total_price REAL NOT NULL,
+			status TEXT DEFAULT 'pending',
+			remark TEXT DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id)
+		)`,
+		// 订单项表
+		`CREATE TABLE IF NOT EXISTS order_items (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			order_id INTEGER NOT NULL,
+			dish_id INTEGER NOT NULL,
+			dish_name TEXT NOT NULL,
+			dish_image TEXT DEFAULT '',
+			price REAL NOT NULL,
+			quantity INTEGER NOT NULL,
+			remark TEXT DEFAULT '',
+			FOREIGN KEY (order_id) REFERENCES orders(id),
+			FOREIGN KEY (dish_id) REFERENCES dishes(id)
+		)`,
 		// 创建索引
 		`CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transaction_date)`,
 		`CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_dishes_user_id ON dishes(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_dishes_category ON dishes(category)`,
+		`CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id)`,
 	}
 
 	for _, query := range queries {

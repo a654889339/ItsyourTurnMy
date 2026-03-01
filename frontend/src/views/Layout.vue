@@ -31,6 +31,20 @@
         >
           统计报表
         </li>
+        <li
+          class="sidebar-menu-item"
+          :class="{ active: route.path === '/dishes' }"
+          @click="router.push('/dishes')"
+        >
+          菜品管理
+        </li>
+        <li
+          class="sidebar-menu-item"
+          :class="{ active: route.path === '/menu' }"
+          @click="router.push('/menu')"
+        >
+          点餐
+        </li>
       </ul>
       <div style="padding: 20px; margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1)">
         <div style="color: rgba(255,255,255,0.6); font-size: 12px; margin-bottom: 8px">
