@@ -17,7 +17,19 @@ type Config struct {
 	JWT          JWTConfig          `yaml:"jwt"`
 	Log          LogConfig          `yaml:"log"`
 	CORS         CORSConfig         `yaml:"cors"`
+	Email        EmailConfig        `yaml:"email"`
 	TencentCloud TencentCloudConfig `yaml:"tencent_cloud"`
+}
+
+// EmailConfig 邮件配置
+type EmailConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+	From     string `yaml:"from"`
+	FromName string `yaml:"from_name"`
 }
 
 // ServerConfig 服务器配置
@@ -245,6 +257,15 @@ func LoadFromEnv() *Config {
 	// CORS
 	cfg.CORS.AllowedOrigins = strings.Split(getEnvString("CORS_ORIGINS", "*"), ",")
 	cfg.CORS.AllowCredentials = getEnvBool("CORS_CREDENTIALS", true)
+
+	// Email
+	cfg.Email.Enabled = getEnvBool("EMAIL_ENABLED", false)
+	cfg.Email.Host = getEnvString("EMAIL_HOST", "smtp.qq.com")
+	cfg.Email.Port = getEnvInt("EMAIL_PORT", 587)
+	cfg.Email.Username = getEnvString("EMAIL_USERNAME", "")
+	cfg.Email.Password = getEnvString("EMAIL_PASSWORD", "")
+	cfg.Email.From = getEnvString("EMAIL_FROM", "")
+	cfg.Email.FromName = getEnvString("EMAIL_FROM_NAME", "财务管理系统")
 
 	Cfg = cfg
 	return cfg

@@ -25,6 +25,7 @@ var (
 	transactionService *service.TransactionService
 	categoryService    *service.CategoryService
 	reportService      *service.ReportService
+	emailService       *service.EmailService
 )
 
 func main() {
@@ -103,6 +104,7 @@ func main() {
 	transactionService = service.NewTransactionService(accountService)
 	categoryService = service.NewCategoryService()
 	reportService = service.NewReportService()
+	emailService = service.NewEmailService(&cfg.Email)
 
 	// 创建路由
 	mux := http.NewServeMux()
@@ -112,6 +114,7 @@ func main() {
 	mux.HandleFunc("/api/v1/health", handleHealth)
 
 	// 认证相关
+	mux.HandleFunc("/api/v1/auth/send-code", handleSendVerificationCode)
 	mux.HandleFunc("/api/v1/auth/register", handleRegister)
 	mux.HandleFunc("/api/v1/auth/login", handleLogin)
 	mux.HandleFunc("/api/v1/auth/me", authMiddleware(handleGetCurrentUser))
@@ -253,6 +256,44 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 
 // ==================== 认证处理 ====================
 
+// 发送邮箱验证码
+func handleSendVerificationCode(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Email string `json:"email"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "无效的请求", http.StatusBadRequest)
+		return
+	}
+
+	if req.Email == "" {
+		jsonError(w, "邮箱不能为空", http.StatusBadRequest)
+		return
+	}
+
+	// 检查邮箱是否已注册
+	if authService.EmailExists(req.Email) {
+		jsonError(w, "该邮箱已被注册", http.StatusBadRequest)
+		return
+	}
+
+	_, err := emailService.SendVerificationCode(req.Email)
+	if err != nil {
+		jsonError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	jsonResponse(w, map[string]interface{}{
+		"message": "验证码已发送",
+	})
+}
+
 func handleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
@@ -263,10 +304,22 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		Username string `json:"username"`
 		Password string `json:"password"`
 		Email    string `json:"email"`
+		Code     string `json:"code"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, "无效的请求", http.StatusBadRequest)
+		return
+	}
+
+	// 验证验证码
+	if req.Code == "" {
+		jsonError(w, "验证码不能为空", http.StatusBadRequest)
+		return
+	}
+
+	if !emailService.VerifyCode(req.Email, req.Code) {
+		jsonError(w, "验证码错误或已过期", http.StatusBadRequest)
 		return
 	}
 

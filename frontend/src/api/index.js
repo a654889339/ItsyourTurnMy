@@ -46,8 +46,12 @@ const api = {
     return instance.post('/auth/login', { username, password })
   },
 
-  register(username, password, email) {
-    return instance.post('/auth/register', { username, password, email })
+  sendVerificationCode(email) {
+    return instance.post('/auth/send-code', { email })
+  },
+
+  register(username, password, email, code) {
+    return instance.post('/auth/register', { username, password, email, code })
   },
 
   getCurrentUser() {

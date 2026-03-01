@@ -159,3 +159,10 @@ func (s *AuthService) ValidateToken(tokenString string) (int64, error) {
 
 	return 0, errors.New("无效的Token")
 }
+
+// EmailExists 检查邮箱是否已存在
+func (s *AuthService) EmailExists(email string) bool {
+	var existingID int64
+	err := database.DB.QueryRow("SELECT id FROM users WHERE email = ?", email).Scan(&existingID)
+	return err == nil
+}

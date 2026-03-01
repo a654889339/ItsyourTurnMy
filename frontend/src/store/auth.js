@@ -17,8 +17,13 @@ export const useAuthStore = defineStore('auth', () => {
     return response
   }
 
-  async function register(username, password, email) {
-    const response = await api.register(username, password, email)
+  async function sendVerificationCode(email) {
+    const response = await api.sendVerificationCode(email)
+    return response
+  }
+
+  async function register(username, password, email, code) {
+    const response = await api.register(username, password, email, code)
     return response
   }
 
@@ -47,6 +52,7 @@ export const useAuthStore = defineStore('auth', () => {
     user,
     isAuthenticated,
     login,
+    sendVerificationCode,
     register,
     logout,
     fetchCurrentUser
