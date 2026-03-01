@@ -172,6 +172,15 @@ const api = {
     return instance.delete(`/orders/${id}`)
   },
 
+  // 菜品报表
+  getDishReport(params = {}) {
+    return instance.get('/dish-reports', { params })
+  },
+
+  getDishReportTrend(params = {}) {
+    return instance.get('/dish-reports/trend', { params })
+  },
+
   // 上传相关
   uploadImage(file) {
     const formData = new FormData()

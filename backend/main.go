@@ -29,6 +29,7 @@ var (
 	dishService        *service.DishService
 	orderService       *service.OrderService
 	uploadService      *service.UploadService
+	dishReportService  *service.DishReportService
 )
 
 func main() {
@@ -111,6 +112,7 @@ func main() {
 	dishService = service.NewDishService()
 	orderService = service.NewOrderService(dishService)
 	uploadService = service.NewUploadService("./uploads", "")
+	dishReportService = service.NewDishReportService()
 
 	// 创建路由
 	mux := http.NewServeMux()
@@ -149,6 +151,10 @@ func main() {
 	// 订单管理
 	mux.HandleFunc("/api/v1/orders", authMiddleware(handleOrders))
 	mux.HandleFunc("/api/v1/orders/", authMiddleware(handleOrderByID))
+
+	// 菜品报表
+	mux.HandleFunc("/api/v1/dish-reports", authMiddleware(handleDishReports))
+	mux.HandleFunc("/api/v1/dish-reports/trend", authMiddleware(handleDishReportTrend))
 
 	// 图片上传
 	mux.HandleFunc("/api/v1/upload/image", authMiddleware(handleUploadImage))
@@ -1058,4 +1064,81 @@ func handleUploadImage(w http.ResponseWriter, r *http.Request) {
 			"url":  imageURL,
 		})
 	}
+}
+
+// handleDishReports 处理菜品报表请求
+func handleDishReports(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserID(r)
+	period := r.URL.Query().Get("period")
+	if period == "" {
+		period = "monthly"
+	}
+
+	// 支持自定义日期范围
+	startDateStr := r.URL.Query().Get("start_date")
+	endDateStr := r.URL.Query().Get("end_date")
+
+	var startDate, endDate time.Time
+	if startDateStr != "" && endDateStr != "" {
+		var err error
+		startDate, err = time.Parse("2006-01-02", startDateStr)
+		if err != nil {
+			jsonError(w, "无效的开始日期格式", http.StatusBadRequest)
+			return
+		}
+		endDate, err = time.Parse("2006-01-02", endDateStr)
+		if err != nil {
+			jsonError(w, "无效的结束日期格式", http.StatusBadRequest)
+			return
+		}
+	} else {
+		startDate, endDate = service.GetPeriodDates(period)
+	}
+
+	report, err := dishReportService.GetDishReport(userID, period, startDate, endDate)
+	if err != nil {
+		jsonError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	jsonResponse(w, report)
+}
+
+// handleDishReportTrend 处理菜品报表趋势数据请求
+func handleDishReportTrend(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserID(r)
+	period := r.URL.Query().Get("period")
+	if period == "" {
+		period = "daily"
+	}
+
+	countStr := r.URL.Query().Get("count")
+	count := 7
+	if countStr != "" {
+		if c, err := strconv.Atoi(countStr); err == nil && c > 0 && c <= 90 {
+			count = c
+		}
+	}
+
+	trend, err := dishReportService.GetTrendData(userID, period, count)
+	if err != nil {
+		jsonError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	jsonResponse(w, map[string]interface{}{
+		"period": period,
+		"count":  count,
+		"data":   trend,
+	})
 }
