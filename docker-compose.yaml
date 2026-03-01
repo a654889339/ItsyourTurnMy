@@ -22,6 +22,14 @@ services:
       - JWT_EXPIRE_HOURS=24
       - LOG_LEVEL=info
       - CORS_ORIGINS=*
+      # 邮件配置
+      - EMAIL_ENABLED=true
+      - EMAIL_HOST=smtp.qq.com
+      - EMAIL_PORT=587
+      - EMAIL_USERNAME=654889339@qq.com
+      - EMAIL_PASSWORD=jvwuiqxrfjmibcdb
+      - EMAIL_FROM=654889339@qq.com
+      - EMAIL_FROM_NAME=财务管理系统
     volumes:
       - finance_data:/app/data
     healthcheck:
