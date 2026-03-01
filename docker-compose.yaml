@@ -30,6 +30,11 @@ services:
       - EMAIL_PASSWORD=jvwuiqxrfjmibcdb
       - EMAIL_FROM=654889339@qq.com
       - EMAIL_FROM_NAME=财务管理系统
+      # 腾讯云 COS 配置（从 .env 文件读取）
+      - COS_SECRET_ID=${COS_SECRET_ID:-}
+      - COS_SECRET_KEY=${COS_SECRET_KEY:-}
+      - COS_BUCKET=${COS_BUCKET:-}
+      - COS_REGION=${COS_REGION:-}
     volumes:
       - finance_data:/app/data
     healthcheck:
