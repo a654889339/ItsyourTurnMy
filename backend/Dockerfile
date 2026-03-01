@@ -45,9 +45,6 @@ WORKDIR /app
 # 从构建阶段复制二进制文件
 COPY --from=builder /app/finance-server .
 
-# 复制配置文件
-COPY config/config.yaml /etc/finance/config.yaml
-
 # 创建数据目录
 RUN mkdir -p /app/data && chown -R finance:finance /app
 
@@ -61,6 +58,5 @@ EXPOSE 8080 9090
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
-# 启动命令
+# 启动命令 - 从环境变量加载配置
 ENTRYPOINT ["./finance-server"]
-CMD ["-config", "/etc/finance/config.yaml"]
