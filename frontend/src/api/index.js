@@ -266,6 +266,16 @@ export const publicApi = {
   // 获取本桌所有订单
   getTableOrders(token) {
     return publicInstance.get(`/orders/${token}`)
+  },
+
+  // 通用 GET 方法
+  get(url, config) {
+    return instance.get(url, config)
+  },
+
+  // 获取操作日志
+  getOperationLogs(params) {
+    return instance.get('/operation-logs', { params })
   }
 }
 
