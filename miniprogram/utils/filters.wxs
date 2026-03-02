@@ -1,0 +1,43 @@
+// WXS 过滤器模块 - 用于模板中的数据格式化
+
+// 获取订单状态文本
+function getStatusText(status) {
+  var statusMap = {
+    'pending': '待处理',
+    'confirmed': '已确认',
+    'preparing': '制作中',
+    'ready': '待取餐',
+    'completed': '已完成',
+    'cancelled': '已取消'
+  }
+  return statusMap[status] || status
+}
+
+// 格式化时间
+function formatTime(timeStr) {
+  if (!timeStr) return ''
+  var date = getDate(timeStr)
+  var month = date.getMonth() + 1
+  var day = date.getDate()
+  var hours = date.getHours()
+  var minutes = date.getMinutes()
+
+  month = month < 10 ? '0' + month : month
+  day = day < 10 ? '0' + day : day
+  hours = hours < 10 ? '0' + hours : hours
+  minutes = minutes < 10 ? '0' + minutes : minutes
+
+  return month + '-' + day + ' ' + hours + ':' + minutes
+}
+
+// 格式化价格
+function formatPrice(price) {
+  if (typeof price !== 'number') return '0.00'
+  return price.toFixed(2)
+}
+
+module.exports = {
+  getStatusText: getStatusText,
+  formatTime: formatTime,
+  formatPrice: formatPrice
+}

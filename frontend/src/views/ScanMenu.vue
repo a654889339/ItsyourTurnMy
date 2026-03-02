@@ -21,10 +21,16 @@
           <span class="table-badge">{{ tableInfo.table_no }}</span>
           <span class="table-capacity">{{ tableInfo.capacity }}人桌</span>
         </div>
-        <button class="cart-btn" @click="showCart = true">
-          <span class="cart-icon">🛒</span>
-          <span v-if="cartCount > 0" class="cart-badge">{{ cartCount }}</span>
-        </button>
+        <div class="header-actions">
+          <button class="orders-btn" @click="showOrders = true">
+            <span>📋</span>
+            <span v-if="tableOrders.length > 0" class="orders-badge">{{ tableOrders.length }}</span>
+          </button>
+          <button class="cart-btn" @click="showCart = true">
+            <span class="cart-icon">🛒</span>
+            <span v-if="cartCount > 0" class="cart-badge">{{ cartCount }}</span>
+          </button>
+        </div>
       </div>
 
       <!-- 分类导航 -->
@@ -89,6 +95,53 @@
           <span class="footer-count">共 {{ cartCount }} 件</span>
         </div>
         <button class="submit-btn" @click="showCart = true">去下单</button>
+      </div>
+
+      <!-- 本桌订单侧边栏 -->
+      <div v-if="showOrders" class="cart-overlay" @click.self="showOrders = false">
+        <div class="cart-panel orders-panel">
+          <div class="cart-header">
+            <h3>本桌订单</h3>
+            <button class="cart-close" @click="showOrders = false">&times;</button>
+          </div>
+
+          <div v-if="ordersLoading" class="cart-empty">
+            <div class="loading-spinner"></div>
+            <p>加载中...</p>
+          </div>
+
+          <div v-else-if="tableOrders.length === 0" class="cart-empty">
+            暂无订单
+          </div>
+
+          <div v-else class="orders-content">
+            <div v-for="order in tableOrders" :key="order.order_no" class="order-card">
+              <div class="order-card-header">
+                <span class="order-no">{{ order.order_no.slice(-8) }}</span>
+                <span class="order-status" :class="order.status">{{ order.status_text }}</span>
+              </div>
+              <div v-if="order.customer_name" class="order-customer">
+                {{ order.customer_name }}
+              </div>
+              <div class="order-items-list">
+                <div v-for="item in order.items" :key="item.id" class="order-item-row">
+                  <span>{{ item.dish_name }} × {{ item.quantity }}</span>
+                  <span>¥{{ (item.price * item.quantity).toFixed(2) }}</span>
+                </div>
+              </div>
+              <div class="order-card-footer">
+                <span class="order-time">{{ formatTime(order.created_at) }}</span>
+                <span class="order-total">¥{{ order.total_price.toFixed(2) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="cart-footer">
+            <button class="refresh-btn" @click="fetchTableOrders" :disabled="ordersLoading">
+              刷新订单
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- 购物车侧边栏 -->
@@ -163,6 +216,9 @@ const loading = ref(true)
 const error = ref('')
 const submitting = ref(false)
 const showCart = ref(false)
+const showOrders = ref(false)
+const ordersLoading = ref(false)
+const tableOrders = ref([])
 
 const tableInfo = ref({ table_no: '', capacity: 0 })
 const categories = ref([])
@@ -229,6 +285,24 @@ async function fetchMenu() {
   }
 }
 
+async function fetchTableOrders() {
+  ordersLoading.value = true
+  try {
+    const res = await publicApi.getTableOrders(token.value)
+    tableOrders.value = res.orders || []
+  } catch (err) {
+    console.error('获取订单失败:', err)
+  } finally {
+    ordersLoading.value = false
+  }
+}
+
+function formatTime(dateStr) {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+}
+
 async function submitOrder() {
   if (cartItems.value.length === 0) {
     alert('购物车是空的')
@@ -250,14 +324,18 @@ async function submitOrder() {
 
     const res = await publicApi.createOrder(token.value, orderData)
 
-    // 跳转到订单结果页
-    router.push({
-      name: 'ScanOrderResult',
-      params: {
-        token: token.value,
-        orderNo: res.order_no
-      }
-    })
+    // 清空购物车
+    cart.value = []
+    customerName.value = ''
+    orderRemark.value = ''
+    showCart.value = false
+
+    // 刷新订单列表
+    fetchTableOrders()
+    fetchMenu() // 刷新库存
+
+    // 显示订单
+    showOrders.value = true
   } catch (err) {
     alert(err.message || '下单失败')
   } finally {
@@ -267,6 +345,7 @@ async function submitOrder() {
 
 onMounted(() => {
   fetchMenu()
+  fetchTableOrders()
 })
 </script>
 
@@ -751,5 +830,133 @@ onMounted(() => {
 .order-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.orders-btn {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: #f5f5f5;
+  border-radius: 50%;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.orders-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: #1890ff;
+  color: #fff;
+  border-radius: 10px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.orders-panel {
+  max-height: 85vh;
+}
+
+.orders-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+}
+
+.order-card {
+  background: #f9f9f9;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.order-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.order-no {
+  font-size: 12px;
+  color: #666;
+  font-family: monospace;
+}
+
+.order-status {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #fff;
+}
+
+.order-status.pending { background: #faad14; }
+.order-status.confirmed { background: #1890ff; }
+.order-status.preparing { background: #722ed1; }
+.order-status.completed { background: #52c41a; }
+.order-status.cancelled { background: #999; }
+
+.order-customer {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.order-items-list {
+  border-top: 1px dashed #e8e8e8;
+  border-bottom: 1px dashed #e8e8e8;
+  padding: 8px 0;
+}
+
+.order-item-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #333;
+  padding: 4px 0;
+}
+
+.order-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.order-time {
+  font-size: 12px;
+  color: #999;
+}
+
+.order-total {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ff4d4f;
+}
+
+.refresh-btn {
+  width: 100%;
+  padding: 12px;
+  background: #1890ff;
+  color: #fff;
+  border: none;
+  border-radius: 24px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.refresh-btn:disabled {
+  opacity: 0.6;
 }
 </style>

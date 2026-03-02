@@ -77,6 +77,16 @@
       <!-- 右侧购物车 -->
       <div class="menu-cart">
         <h3 class="cart-title">购物车</h3>
+        <!-- 桌号选择 -->
+        <div class="table-select">
+          <label>选择桌号：</label>
+          <select v-model="selectedTableId" class="form-select">
+            <option :value="null">不选择桌号</option>
+            <option v-for="table in tables" :key="table.id" :value="table.id">
+              {{ table.table_no }}
+            </option>
+          </select>
+        </div>
         <div v-if="cart.length === 0" class="cart-empty">
           还没有添加菜品
         </div>
@@ -138,7 +148,10 @@
           <div v-else class="orders-list">
             <div v-for="order in orders" :key="order.id" class="order-card">
               <div class="order-header">
-                <span class="order-no">{{ order.order_no }}</span>
+                <div class="order-header-left">
+                  <span class="order-no">{{ order.order_no }}</span>
+                  <span v-if="order.table_no" class="order-table">{{ order.table_no }}</span>
+                </div>
                 <span class="order-status" :class="order.status">{{ getOrderStatusName(order.status) }}</span>
               </div>
               <div class="order-items">
@@ -180,6 +193,8 @@ const cart = ref([])
 const orderRemark = ref('')
 const orders = ref([])
 const orderFilter = ref('')
+const tables = ref([])
+const selectedTableId = ref(null)
 
 const orderStatusNames = {
   pending: '待确认',
@@ -255,6 +270,15 @@ async function fetchOrders() {
   }
 }
 
+async function fetchTables() {
+  try {
+    const res = await api.getTables()
+    tables.value = (res.tables || []).filter(t => t.status === 'active')
+  } catch (error) {
+    console.error('获取餐桌失败:', error)
+  }
+}
+
 function selectCategory(cat) {
   selectedCategory.value = cat
 }
@@ -299,7 +323,8 @@ async function submitOrder() {
         quantity: item.quantity,
         remark: item.remark
       })),
-      remark: orderRemark.value
+      remark: orderRemark.value,
+      table_id: selectedTableId.value
     }
     await api.createOrder(orderData)
     successMsg.value = '下单成功！'
@@ -332,6 +357,7 @@ onMounted(() => {
   fetchDishes()
   fetchCategories()
   fetchOrders()
+  fetchTables()
 })
 </script>
 
@@ -718,5 +744,36 @@ onMounted(() => {
   padding: 12px 16px;
   border-radius: 4px;
   margin-bottom: 16px;
+}
+
+.table-select {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.table-select label {
+  display: block;
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 6px;
+}
+
+.table-select .form-select {
+  width: 100%;
+}
+
+.order-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.order-table {
+  padding: 2px 8px;
+  background: #fff7e6;
+  color: #fa8c16;
+  border-radius: 4px;
+  font-size: 12px;
 }
 </style>

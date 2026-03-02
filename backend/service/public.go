@@ -314,3 +314,67 @@ func getStatusText(status string) string {
 		return status
 	}
 }
+
+// GetTableOrders 获取本桌所有订单
+func (s *PublicService) GetTableOrders(token string) ([]*PublicOrderStatusResponse, error) {
+	// 验证token并获取餐桌信息
+	table, err := s.tableService.ValidateTableToken(token)
+	if err != nil {
+		return nil, err
+	}
+
+	// 查询该餐桌的所有订单（最近24小时内的）
+	rows, err := database.DB.Query(`
+		SELECT id, order_no, table_no, total_price, status, customer_name, remark, created_at, updated_at
+		FROM orders
+		WHERE table_id = ? AND created_at > datetime('now', '-24 hours')
+		ORDER BY created_at DESC
+	`, table.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var orders []*PublicOrderStatusResponse
+	for rows.Next() {
+		var order PublicOrderStatusResponse
+		var orderID int64
+		err := rows.Scan(
+			&orderID, &order.OrderNo, &order.TableNo, &order.TotalPrice,
+			&order.Status, &order.CustomerName, &order.Remark,
+			&order.CreatedAt, &order.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		order.StatusText = getStatusText(order.Status)
+
+		// 查询订单项
+		itemRows, err := database.DB.Query(`
+			SELECT id, order_id, dish_id, dish_name, dish_image, price, quantity, remark
+			FROM order_items WHERE order_id = ?
+		`, orderID)
+		if err != nil {
+			return nil, err
+		}
+
+		for itemRows.Next() {
+			var item model.OrderItem
+			err := itemRows.Scan(
+				&item.ID, &item.OrderID, &item.DishID, &item.DishName,
+				&item.DishImage, &item.Price, &item.Quantity, &item.Remark,
+			)
+			if err != nil {
+				itemRows.Close()
+				return nil, err
+			}
+			order.Items = append(order.Items, item)
+		}
+		itemRows.Close()
+
+		orders = append(orders, &order)
+	}
+
+	return orders, nil
+}

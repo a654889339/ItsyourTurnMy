@@ -1,0 +1,117 @@
+<!-- 引入WXS模块 -->
+<wxs src="./menu.wxs" module="utils" />
+
+<!-- 未扫码状态 -->
+<view class="scan-prompt" wx:if="{{!token}}">
+  <view class="scan-icon">📷</view>
+  <view class="scan-text">请先扫描餐桌二维码</view>
+  <button class="btn btn-primary" bindtap="scanCode">扫码点餐</button>
+</view>
+
+<!-- 已扫码状态 -->
+<view class="menu-page" wx:else>
+  <!-- 顶部餐桌信息 -->
+  <view class="table-header">
+    <view class="table-info">
+      <text class="table-no">{{tableInfo.table_no}}号桌</text>
+      <text class="table-capacity">{{tableInfo.capacity}}人桌</text>
+    </view>
+    <button class="btn btn-default rescan-btn" bindtap="scanCode">切换餐桌</button>
+  </view>
+
+  <!-- 分类导航 -->
+  <scroll-view class="category-nav" scroll-x="true">
+    <view class="category-item {{selectedCategory === '' ? 'active' : ''}}"
+          bindtap="selectCategory" data-category="">全部</view>
+    <view class="category-item {{selectedCategory === item ? 'active' : ''}}"
+          wx:for="{{categories}}" wx:key="*this"
+          bindtap="selectCategory" data-category="{{item}}">{{item}}</view>
+  </scroll-view>
+
+  <!-- 菜品列表 -->
+  <scroll-view class="dishes-list" scroll-y="true">
+    <view class="dish-item" wx:for="{{filteredDishes}}" wx:key="id">
+      <image class="dish-image" src="{{item.image || '/images/no-image.png'}}" mode="aspectFill"></image>
+      <view class="dish-content">
+        <view class="dish-name">{{item.name}}</view>
+        <view class="dish-desc" wx:if="{{item.description}}">{{item.description}}</view>
+        <view class="dish-tags" wx:if="{{item.dietary_tags}}">
+          <text class="tag tag-orange" wx:for="{{item.dietary_tags.split(',')}}" wx:for-item="tag" wx:key="*this">{{tag}}</text>
+        </view>
+        <view class="dish-footer">
+          <text class="dish-price price">¥{{utils.formatPrice(item.price)}}</text>
+          <view class="dish-actions" wx:if="{{item.status === 'available'}}">
+            <view class="qty-control" wx:if="{{utils.getCartQty(cart, item.id) > 0}}">
+              <view class="qty-btn" bindtap="decreaseCart" data-dish="{{item}}">-</view>
+              <text class="qty-num">{{utils.getCartQty(cart, item.id)}}</text>
+            </view>
+            <view class="qty-btn add-btn" bindtap="addToCart" data-dish="{{item}}">+</view>
+          </view>
+          <text class="sold-out" wx:else>{{item.status === 'sold_out' ? '售罄' : '下架'}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="empty" wx:if="{{filteredDishes.length === 0}}">暂无菜品</view>
+  </scroll-view>
+
+  <!-- 底部购物车栏 -->
+  <view class="cart-bar" wx:if="{{cartCount > 0}}">
+    <view class="cart-info" bindtap="showCart">
+      <view class="cart-icon">🛒</view>
+      <view class="cart-badge">{{cartCount}}</view>
+      <view class="cart-total">
+        <text class="price">¥{{cartTotal}}</text>
+      </view>
+    </view>
+    <button class="btn btn-danger submit-btn" bindtap="showCart">去下单</button>
+  </view>
+
+  <!-- 购物车弹窗 -->
+  <view class="cart-modal {{showCartModal ? 'show' : ''}}" bindtap="hideCart">
+    <view class="cart-panel" catchtap="stopPropagation">
+      <view class="cart-header">
+        <text>购物车</text>
+        <view class="cart-clear" bindtap="clearCart">清空</view>
+      </view>
+
+      <scroll-view class="cart-items" scroll-y="true">
+        <view class="cart-item" wx:for="{{cart}}" wx:key="id">
+          <view class="cart-item-info">
+            <text class="cart-item-name">{{item.dish.name}}</text>
+            <text class="cart-item-price price">¥{{utils.formatPrice(item.dish.price)}}</text>
+          </view>
+          <view class="cart-item-actions">
+            <view class="qty-btn" bindtap="decreaseCart" data-dish="{{item.dish}}">-</view>
+            <text class="qty-num">{{item.quantity}}</text>
+            <view class="qty-btn" bindtap="addToCart" data-dish="{{item.dish}}">+</view>
+          </view>
+          <input class="cart-item-remark" placeholder="备注(如少辣)"
+                 value="{{item.remark}}" bindinput="updateItemRemark"
+                 data-id="{{item.dish.id}}"/>
+        </view>
+      </scroll-view>
+
+      <view class="cart-form">
+        <view class="form-item">
+          <text class="form-label">您的称呼</text>
+          <input class="form-input" placeholder="方便叫号" value="{{customerName}}" bindinput="onNameInput"/>
+        </view>
+        <view class="form-item">
+          <text class="form-label">订单备注</text>
+          <textarea class="form-textarea" placeholder="其他要求..." value="{{orderRemark}}" bindinput="onRemarkInput"/>
+        </view>
+      </view>
+
+      <view class="cart-footer">
+        <view class="cart-total-row">
+          <text>合计：</text>
+          <text class="price cart-total-price">¥{{cartTotal}}</text>
+        </view>
+        <button class="btn btn-danger order-btn" bindtap="submitOrder" disabled="{{submitting}}">
+          {{submitting ? '提交中...' : '确认下单'}}
+        </button>
+      </view>
+    </view>
+  </view>
+</view>

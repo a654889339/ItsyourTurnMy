@@ -168,6 +168,10 @@ const api = {
     return instance.put(`/orders/${id}/status`, { status })
   },
 
+  updateOrder(id, data) {
+    return instance.put(`/orders/${id}`, data)
+  },
+
   deleteOrder(id) {
     return instance.delete(`/orders/${id}`)
   },
@@ -257,6 +261,11 @@ export const publicApi = {
   // 查询订单状态
   getOrderStatus(token, orderNo) {
     return publicInstance.get(`/order/${token}/${orderNo}`)
+  },
+
+  // 获取本桌所有订单
+  getTableOrders(token) {
+    return publicInstance.get(`/orders/${token}`)
   }
 }
 

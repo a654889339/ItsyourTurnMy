@@ -54,10 +54,24 @@
         </li>
         <li
           class="sidebar-menu-item"
+          :class="{ active: route.path === '/orders' }"
+          @click="router.push('/orders')"
+        >
+          订单管理
+        </li>
+        <li
+          class="sidebar-menu-item"
           :class="{ active: route.path === '/dish-reports' }"
           @click="router.push('/dish-reports')"
         >
           销售报表
+        </li>
+        <li
+          class="sidebar-menu-item"
+          :class="{ active: route.path === '/operation-logs' }"
+          @click="router.push('/operation-logs')"
+        >
+          操作记录
         </li>
       </ul>
       <div style="padding: 20px; margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1)">

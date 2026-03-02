@@ -1,0 +1,23 @@
+// 菜单页面WXS模块
+
+// 获取购物车中某菜品的数量
+function getCartQty(cart, dishId) {
+  if (!cart || !cart.length) return 0
+  for (var i = 0; i < cart.length; i++) {
+    if (cart[i].dish && cart[i].dish.id === dishId) {
+      return cart[i].quantity
+    }
+  }
+  return 0
+}
+
+// 格式化价格
+function formatPrice(price) {
+  if (typeof price !== 'number') return '0.00'
+  return price.toFixed(2)
+}
+
+module.exports = {
+  getCartQty: getCartQty,
+  formatPrice: formatPrice
+}

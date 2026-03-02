@@ -1,0 +1,117 @@
+<!-- 引入WXS过滤器 -->
+<wxs src="../../utils/filters.wxs" module="filters" />
+
+<!-- 订单列表页面 -->
+<view class="orders-page">
+  <!-- 扫码提示（未扫码时显示） -->
+  <view class="scan-prompt" wx:if="{{!token}}">
+    <text class="scan-icon">📱</text>
+    <text class="scan-text">请先扫描餐桌二维码</text>
+    <button class="btn btn-primary" bindtap="scanQRCode">扫码点餐</button>
+  </view>
+
+  <!-- 订单列表 -->
+  <view class="orders-container" wx:else>
+    <!-- 餐桌信息 -->
+    <view class="table-header" wx:if="{{tableInfo}}">
+      <view class="table-info">
+        <text class="table-no">{{tableInfo.tableNo}}号桌</text>
+      </view>
+      <button class="btn btn-default rescan-btn" size="mini" bindtap="scanQRCode">换桌</button>
+    </view>
+
+    <!-- 加载中 -->
+    <view class="loading" wx:if="{{loading}}">
+      <text>加载中...</text>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty" wx:elif="{{orders.length === 0}}">
+      <text class="empty-icon">📋</text>
+      <text class="empty-text">暂无订单</text>
+      <button class="btn btn-primary" bindtap="goToMenu">去点餐</button>
+    </view>
+
+    <!-- 订单列表 -->
+    <scroll-view class="orders-list" scroll-y wx:else>
+      <view class="order-card" wx:for="{{orders}}" wx:key="order_no" bindtap="showOrderDetail" data-order="{{item}}">
+        <!-- 订单头部 -->
+        <view class="order-header">
+          <view class="order-time">{{filters.formatTime(item.created_at)}}</view>
+          <view class="order-status {{item.status}}">{{filters.getStatusText(item.status)}}</view>
+        </view>
+
+        <!-- 菜品摘要 -->
+        <view class="order-summary">
+          <text class="dish-names">{{item.dishSummary}}</text>
+        </view>
+
+        <!-- 订单底部 -->
+        <view class="order-footer">
+          <view class="order-info">
+            <text class="order-no-text">{{item.order_no}}</text>
+            <text class="item-count">共{{item.itemCount}}件</text>
+          </view>
+          <view class="order-total">
+            <text class="total-price price">¥{{filters.formatPrice(item.total_price)}}</text>
+            <text class="view-detail">查看详情 ></text>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <!-- 订单详情弹窗 -->
+  <view class="detail-modal {{showDetail ? 'show' : ''}}" bindtap="hideOrderDetail">
+    <view class="detail-panel" catchtap="stopPropagation" wx:if="{{currentOrder}}">
+      <!-- 弹窗头部 -->
+      <view class="detail-header">
+        <text class="detail-title">订单详情</text>
+        <view class="close-btn" bindtap="hideOrderDetail">×</view>
+      </view>
+
+      <!-- 订单状态 -->
+      <view class="detail-status">
+        <view class="status-badge {{currentOrder.status}}">{{filters.getStatusText(currentOrder.status)}}</view>
+        <text class="status-time">下单时间：{{filters.formatTime(currentOrder.created_at)}}</text>
+      </view>
+
+      <!-- 订单号 -->
+      <view class="detail-order-no">
+        <text>订单号：{{currentOrder.order_no}}</text>
+      </view>
+
+      <!-- 菜品列表 -->
+      <view class="detail-items">
+        <view class="detail-item" wx:for="{{currentOrder.items}}" wx:key="id" bindtap="previewDishImage" data-image="{{item.dish_image}}">
+          <image class="detail-item-image" src="{{item.dish_image || '/images/no-image.png'}}" mode="aspectFill"></image>
+          <view class="item-info">
+            <text class="item-name">{{item.dish_name}}</text>
+            <text class="item-remark" wx:if="{{item.remark}}">（{{item.remark}}）</text>
+          </view>
+          <view class="item-right">
+            <text class="item-qty">x{{item.quantity}}</text>
+            <text class="item-price">¥{{filters.formatPrice(item.price * item.quantity)}}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 订单备注 -->
+      <view class="detail-remark" wx:if="{{currentOrder.remark}}">
+        <text class="remark-label">订单备注：</text>
+        <text class="remark-text">{{currentOrder.remark}}</text>
+      </view>
+
+      <!-- 顾客信息 -->
+      <view class="detail-customer" wx:if="{{currentOrder.customer_name}}">
+        <text>顾客称呼：{{currentOrder.customer_name}}</text>
+      </view>
+
+      <!-- 合计 -->
+      <view class="detail-total">
+        <text class="total-label">合计</text>
+        <text class="total-price price">¥{{filters.formatPrice(currentOrder.total_price)}}</text>
+      </view>
+    </view>
+  </view>
+</view>

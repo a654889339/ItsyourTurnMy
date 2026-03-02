@@ -137,6 +137,22 @@ func createTables() error {
 			FOREIGN KEY (order_id) REFERENCES orders(id),
 			FOREIGN KEY (dish_id) REFERENCES dishes(id)
 		)`,
+		// 操作日志表
+		`CREATE TABLE IF NOT EXISTS operation_logs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			username TEXT DEFAULT '',
+			module TEXT NOT NULL,
+			action TEXT NOT NULL,
+			target_id INTEGER DEFAULT 0,
+			target_name TEXT DEFAULT '',
+			description TEXT DEFAULT '',
+			old_value TEXT DEFAULT '',
+			new_value TEXT DEFAULT '',
+			ip TEXT DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id)
+		)`,
 		// 创建索引
 		`CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id)`,
@@ -149,9 +165,10 @@ func createTables() error {
 		`CREATE INDEX IF NOT EXISTS idx_tables_qr_code_token ON tables(qr_code_token)`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`,
-		`CREATE INDEX IF NOT EXISTS idx_orders_table_id ON orders(table_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_orders_order_source ON orders(order_source)`,
 		`CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_operation_logs_user_id ON operation_logs(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_operation_logs_module ON operation_logs(module)`,
+		`CREATE INDEX IF NOT EXISTS idx_operation_logs_created_at ON operation_logs(created_at)`,
 	}
 
 	for _, query := range queries {
@@ -161,7 +178,58 @@ func createTables() error {
 	}
 
 	log.Println("数据库表创建成功")
+
+	// 执行数据库迁移（添加新字段到已有表）
+	if err := migrateDatabase(); err != nil {
+		log.Printf("数据库迁移警告: %v", err)
+	}
+
+	// 迁移后创建依赖新字段的索引
+	postMigrationIndexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_orders_table_id ON orders(table_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_orders_order_source ON orders(order_source)`,
+	}
+	for _, query := range postMigrationIndexes {
+		if _, err := DB.Exec(query); err != nil {
+			log.Printf("创建索引警告: %v", err)
+		}
+	}
+
 	return initDefaultCategories()
+}
+
+// migrateDatabase 数据库迁移，添加新字段到已有表
+func migrateDatabase() error {
+	// 检查并添加 orders 表的新字段
+	migrations := []struct {
+		table  string
+		column string
+		ddl    string
+	}{
+		{"orders", "table_id", "ALTER TABLE orders ADD COLUMN table_id INTEGER"},
+		{"orders", "table_no", "ALTER TABLE orders ADD COLUMN table_no TEXT DEFAULT ''"},
+		{"orders", "order_source", "ALTER TABLE orders ADD COLUMN order_source TEXT DEFAULT 'admin'"},
+		{"orders", "customer_name", "ALTER TABLE orders ADD COLUMN customer_name TEXT DEFAULT ''"},
+	}
+
+	for _, m := range migrations {
+		// 检查列是否存在
+		var count int
+		err := DB.QueryRow(`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, m.table, m.column).Scan(&count)
+		if err != nil {
+			continue
+		}
+		if count == 0 {
+			// 列不存在，添加它
+			if _, err := DB.Exec(m.ddl); err != nil {
+				log.Printf("迁移 %s.%s 失败: %v", m.table, m.column, err)
+			} else {
+				log.Printf("迁移成功: 添加 %s.%s", m.table, m.column)
+			}
+		}
+	}
+
+	return nil
 }
 
 // initDefaultCategories 初始化默认分类

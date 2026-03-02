@@ -132,3 +132,21 @@ type OrderItem struct {
 	Quantity  int     `json:"quantity"` // 数量
 	Remark    string  `json:"remark"`   // 单项备注（如：少辣、多葱等）
 }
+
+// ==================== 操作日志模型 ====================
+
+// OperationLog 操作日志模型
+type OperationLog struct {
+	ID          int64     `json:"id"`
+	UserID      int64     `json:"user_id"`
+	Username    string    `json:"username"`      // 操作人用户名
+	Module      string    `json:"module"`        // 模块: dish, order, table, account, etc.
+	Action      string    `json:"action"`        // 操作: create, update, delete
+	TargetID    int64     `json:"target_id"`     // 操作对象ID
+	TargetName  string    `json:"target_name"`   // 操作对象名称（如菜品名、订单号）
+	Description string    `json:"description"`   // 操作描述
+	OldValue    string    `json:"old_value"`     // 修改前的值（JSON格式）
+	NewValue    string    `json:"new_value"`     // 修改后的值（JSON格式）
+	IP          string    `json:"ip"`            // 操作IP
+	CreatedAt   time.Time `json:"created_at"`
+}

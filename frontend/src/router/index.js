@@ -64,6 +64,16 @@ const routes = [
         path: 'tables',
         name: 'Tables',
         component: () => import('../views/Tables.vue')
+      },
+      {
+        path: 'orders',
+        name: 'OrderManagement',
+        component: () => import('../views/OrderManagement.vue')
+      },
+      {
+        path: 'operation-logs',
+        name: 'OperationLogs',
+        component: () => import('../views/OperationLogs.vue')
       }
     ]
   }
