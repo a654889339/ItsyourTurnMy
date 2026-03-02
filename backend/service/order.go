@@ -378,37 +378,102 @@ func (s *OrderService) UpdateOrderStatus(ctx context.Context, userID, orderID in
 		return errors.New("无效的订单状态")
 	}
 
+	// 收集库存恢复信息，用于事务提交后记录
+	type stockRestore struct {
+		DishID   int64
+		OldStock int
+		NewStock int
+	}
+	var stockRestores []stockRestore
+	var orderNo string
+
 	// 如果是取消订单，需要恢复库存
 	if status == "cancelled" {
-		// 获取订单项
-		rows, err := database.DB.Query(`
-			SELECT oi.dish_id, oi.quantity FROM order_items oi
-			JOIN orders o ON oi.order_id = o.id
-			WHERE o.id = ? AND o.user_id = ? AND o.status != 'cancelled'
-		`, orderID, userID)
+		// 先获取订单号
+		var currentStatus string
+		err := database.DB.QueryRow("SELECT order_no, status FROM orders WHERE id = ? AND user_id = ?", orderID, userID).Scan(&orderNo, &currentStatus)
+		if err == sql.ErrNoRows {
+			return errors.New("订单不存在")
+		}
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		if currentStatus == "cancelled" {
+			return errors.New("订单已取消")
+		}
 
+		// 获取订单项和当前库存
+		rows, err := database.DB.Query(`
+			SELECT oi.dish_id, oi.quantity, d.stock FROM order_items oi
+			JOIN dishes d ON oi.dish_id = d.id
+			WHERE oi.order_id = ?
+		`, orderID)
+		if err != nil {
+			return err
+		}
+
+		// 先收集所有数据，然后关闭rows
+		type itemInfo struct {
+			DishID   int64
+			Quantity int
+			Stock    int
+		}
+		var items []itemInfo
 		for rows.Next() {
-			var dishID int64
-			var quantity int
-			if err := rows.Scan(&dishID, &quantity); err != nil {
+			var info itemInfo
+			if err := rows.Scan(&info.DishID, &info.Quantity, &info.Stock); err != nil {
+				rows.Close()
 				return err
 			}
+			items = append(items, info)
+		}
+		rows.Close()
 
-			// 恢复库存
-			_, err = database.DB.Exec(`
-				UPDATE dishes SET stock = CASE WHEN stock = -1 THEN -1 ELSE stock + ? END, updated_at = ?
-				WHERE id = ?
-			`, quantity, time.Now(), dishID)
-			if err != nil {
-				return err
+		// 使用事务更新库存和订单状态
+		tx, err := database.DB.Begin()
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+
+		for _, item := range items {
+			if item.Stock != -1 {
+				newStock := item.Stock + item.Quantity
+				_, err = tx.Exec("UPDATE dishes SET stock = ?, updated_at = ? WHERE id = ?", newStock, time.Now(), item.DishID)
+				if err != nil {
+					return err
+				}
+				stockRestores = append(stockRestores, stockRestore{DishID: item.DishID, OldStock: item.Stock, NewStock: newStock})
 			}
 		}
+
+		// 更新订单状态
+		result, err := tx.Exec(`UPDATE orders SET status = ?, updated_at = ? WHERE id = ? AND user_id = ?`, status, time.Now(), orderID, userID)
+		if err != nil {
+			return err
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			return errors.New("订单不存在或无权修改")
+		}
+
+		// 提交事务
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+
+		// 事务提交成功后，记录库存变化日志
+		for _, sr := range stockRestores {
+			s.dishService.LogDishStockChange(sr.DishID, sr.OldStock, sr.NewStock, "取消订单恢复", orderNo)
+		}
+
+		return nil
 	}
 
+	// 非取消状态，直接更新
 	result, err := database.DB.Exec(`
 		UPDATE orders SET status = ?, updated_at = ? WHERE id = ? AND user_id = ?
 	`, status, time.Now(), orderID, userID)
