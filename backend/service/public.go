@@ -111,6 +111,14 @@ func (s *PublicService) CreatePublicOrder(token string, req *PublicOrderRequest)
 	var totalPrice float64
 	var orderItems []model.OrderItem
 
+	// 收集库存变化信息，用于事务提交后记录
+	type stockChange struct {
+		DishID   int64
+		OldStock int
+		NewStock int
+	}
+	var stockChanges []stockChange
+
 	for _, item := range req.Items {
 		if item.Quantity <= 0 {
 			return nil, errors.New("商品数量必须大于0")
@@ -143,13 +151,16 @@ func (s *PublicService) CreatePublicOrder(token string, req *PublicOrderRequest)
 
 		// 扣减库存
 		if dish.Stock != -1 {
+			newStock := dish.Stock - item.Quantity
 			_, err = tx.Exec(
-				"UPDATE dishes SET stock = stock - ? WHERE id = ?",
-				item.Quantity, dish.ID,
+				"UPDATE dishes SET stock = ? WHERE id = ?",
+				newStock, dish.ID,
 			)
 			if err != nil {
 				return nil, err
 			}
+			// 记录库存变化
+			stockChanges = append(stockChanges, stockChange{DishID: dish.ID, OldStock: dish.Stock, NewStock: newStock})
 		}
 
 		// 计算小计
@@ -200,6 +211,11 @@ func (s *PublicService) CreatePublicOrder(token string, req *PublicOrderRequest)
 	// 提交事务
 	if err := tx.Commit(); err != nil {
 		return nil, err
+	}
+
+	// 事务提交成功后，记录库存变化日志
+	for _, sc := range stockChanges {
+		s.dishService.LogDishStockChange(sc.DishID, sc.OldStock, sc.NewStock, "扫码点餐扣减", orderNo)
 	}
 
 	return &PublicOrderResponse{

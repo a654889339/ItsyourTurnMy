@@ -55,6 +55,14 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int64, req *Creat
 	var totalPrice float64
 	var orderItems []model.OrderItem
 
+	// 收集库存变化信息，用于事务提交后记录
+	type stockChange struct {
+		DishID   int64
+		OldStock int
+		NewStock int
+	}
+	var stockChanges []stockChange
+
 	for _, item := range req.Items {
 		if item.Quantity <= 0 {
 			return nil, errors.New("菜品数量必须大于0")
@@ -88,6 +96,8 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int64, req *Creat
 			if err != nil {
 				return nil, err
 			}
+			// 记录库存变化
+			stockChanges = append(stockChanges, stockChange{DishID: dish.ID, OldStock: dish.Stock, NewStock: newStock})
 		}
 
 		totalPrice += dish.Price * float64(item.Quantity)
@@ -152,6 +162,11 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int64, req *Creat
 	// 提交事务
 	if err := tx.Commit(); err != nil {
 		return nil, err
+	}
+
+	// 事务提交成功后，记录库存变化日志
+	for _, sc := range stockChanges {
+		s.dishService.LogDishStockChange(sc.DishID, sc.OldStock, sc.NewStock, "点餐扣减", orderNo)
 	}
 
 	order := &model.Order{

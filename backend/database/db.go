@@ -203,6 +203,7 @@ func migrateDatabase() error {
 		{"orders", "table_no", "ALTER TABLE orders ADD COLUMN table_no TEXT DEFAULT ''"},
 		{"orders", "order_source", "ALTER TABLE orders ADD COLUMN order_source TEXT DEFAULT 'admin'"},
 		{"orders", "customer_name", "ALTER TABLE orders ADD COLUMN customer_name TEXT DEFAULT ''"},
+		{"dish_change_logs", "order_no", "ALTER TABLE dish_change_logs ADD COLUMN order_no TEXT DEFAULT ''"},
 	}
 
 	for _, m := range migrations {

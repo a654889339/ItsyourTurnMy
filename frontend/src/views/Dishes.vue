@@ -179,8 +179,11 @@
           </div>
           <div v-else class="change-logs-list">
             <div v-for="log in changeLogs" :key="log.id" class="change-log-item">
-              <div class="change-log-type" :class="log.type">
-                {{ log.type === 'stock' ? '库存' : '价格' }}
+              <div class="change-log-header">
+                <div class="change-log-type" :class="log.type">
+                  {{ log.type === 'stock' ? '库存' : '价格' }}
+                </div>
+                <span class="change-log-time">{{ formatTime(log.created_at) }}</span>
               </div>
               <div class="change-log-detail">
                 <span class="old-value">{{ formatLogValue(log.type, log.old_value) }}</span>
@@ -189,7 +192,7 @@
               </div>
               <div class="change-log-meta">
                 <span class="remark">{{ log.remark }}</span>
-                <span class="time">{{ formatTime(log.created_at) }}</span>
+                <span v-if="log.order_no" class="order-no">订单: {{ formatOrderNo(log.order_no) }}</span>
               </div>
             </div>
           </div>
@@ -333,6 +336,12 @@ function formatTime(timeStr) {
   const h = String(date.getHours()).padStart(2, '0')
   const min = String(date.getMinutes()).padStart(2, '0')
   return `${m}-${d} ${h}:${min}`
+}
+
+function formatOrderNo(orderNo) {
+  if (!orderNo) return ''
+  // 订单号格式为 ORD + 时间戳 + userID，只显示后8位
+  return orderNo.length > 8 ? '...' + orderNo.slice(-8) : orderNo
 }
 
 function openAddModal() {
@@ -686,15 +695,20 @@ onMounted(() => {
 
 .change-log-item {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-direction: column;
+  gap: 8px;
   padding: 12px 0;
   border-bottom: 1px solid #f0f0f0;
-  align-items: center;
 }
 
 .change-log-item:last-child {
   border-bottom: none;
+}
+
+.change-log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .change-log-type {
@@ -714,8 +728,12 @@ onMounted(() => {
   color: #fa8c16;
 }
 
+.change-log-time {
+  font-size: 12px;
+  color: #999;
+}
+
 .change-log-detail {
-  flex: 1;
   font-size: 14px;
 }
 
@@ -735,10 +753,14 @@ onMounted(() => {
 }
 
 .change-log-meta {
-  width: 100%;
   display: flex;
   justify-content: space-between;
   font-size: 12px;
   color: #999;
+}
+
+.change-log-meta .order-no {
+  color: #1890ff;
+  font-family: monospace;
 }
 </style>

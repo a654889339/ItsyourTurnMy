@@ -284,7 +284,7 @@ func (s *DishService) GetDishChangeLogs(ctx context.Context, userID, dishID int6
 	}
 
 	rows, err := database.DB.Query(`
-		SELECT id, dish_id, type, old_value, new_value, remark, created_at
+		SELECT id, dish_id, type, old_value, new_value, remark, COALESCE(order_no, ''), created_at
 		FROM dish_change_logs WHERE dish_id = ? ORDER BY created_at DESC LIMIT 50
 	`, dishID)
 	if err != nil {
@@ -295,7 +295,7 @@ func (s *DishService) GetDishChangeLogs(ctx context.Context, userID, dishID int6
 	var logs []*model.DishChangeLog
 	for rows.Next() {
 		var log model.DishChangeLog
-		if err := rows.Scan(&log.ID, &log.DishID, &log.Type, &log.OldValue, &log.NewValue, &log.Remark, &log.CreatedAt); err != nil {
+		if err := rows.Scan(&log.ID, &log.DishID, &log.Type, &log.OldValue, &log.NewValue, &log.Remark, &log.OrderNo, &log.CreatedAt); err != nil {
 			return nil, err
 		}
 		logs = append(logs, &log)
@@ -305,10 +305,10 @@ func (s *DishService) GetDishChangeLogs(ctx context.Context, userID, dishID int6
 }
 
 // LogDishStockChange 记录库存变化（供订单服务调用）
-func (s *DishService) LogDishStockChange(dishID int64, oldStock, newStock int, remark string) {
+func (s *DishService) LogDishStockChange(dishID int64, oldStock, newStock int, remark, orderNo string) {
 	nowStr := time.Now().Format("2006-01-02 15:04:05")
 	database.DB.Exec(`
-		INSERT INTO dish_change_logs (dish_id, type, old_value, new_value, remark, created_at)
-		VALUES (?, 'stock', ?, ?, ?, ?)
-	`, dishID, float64(oldStock), float64(newStock), remark, nowStr)
+		INSERT INTO dish_change_logs (dish_id, type, old_value, new_value, remark, order_no, created_at)
+		VALUES (?, 'stock', ?, ?, ?, ?, ?)
+	`, dishID, float64(oldStock), float64(newStock), remark, orderNo, nowStr)
 }

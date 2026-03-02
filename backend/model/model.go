@@ -141,5 +141,6 @@ type DishChangeLog struct {
 	OldValue  float64   `json:"old_value"` // 旧值
 	NewValue  float64   `json:"new_value"` // 新值
 	Remark    string    `json:"remark"`    // 备注（如：下单扣减、手动调整）
+	OrderNo   string    `json:"order_no"`  // 关联订单号（点餐扣减时记录）
 	CreatedAt time.Time `json:"created_at"`
 }
