@@ -108,16 +108,16 @@ func (s *OperationLogService) ListLogs(userID int64, req *ListLogsReq) ([]*model
 
 	// 日期筛选
 	if req.StartDate != "" {
-		query += " AND date(created_at) >= ?"
-		countQuery += " AND date(created_at) >= ?"
-		args = append(args, req.StartDate)
-		countArgs = append(countArgs, req.StartDate)
+		query += " AND created_at >= ?"
+		countQuery += " AND created_at >= ?"
+		args = append(args, req.StartDate+" 00:00:00")
+		countArgs = append(countArgs, req.StartDate+" 00:00:00")
 	}
 	if req.EndDate != "" {
-		query += " AND date(created_at) <= ?"
-		countQuery += " AND date(created_at) <= ?"
-		args = append(args, req.EndDate)
-		countArgs = append(countArgs, req.EndDate)
+		query += " AND created_at <= ?"
+		countQuery += " AND created_at <= ?"
+		args = append(args, req.EndDate+" 23:59:59")
+		countArgs = append(countArgs, req.EndDate+" 23:59:59")
 	}
 
 	// 关键词搜索

@@ -1619,7 +1619,7 @@ func logOperation(r *http.Request, module, action string, targetID int64, target
 		ip = r.RemoteAddr
 	}
 
-	oplogService.Log(service.LogEntry{
+	err := oplogService.Log(service.LogEntry{
 		UserID:      userID,
 		Username:    username,
 		Module:      module,
@@ -1631,4 +1631,7 @@ func logOperation(r *http.Request, module, action string, targetID int64, target
 		NewValue:    newValue,
 		IP:          ip,
 	})
+	if err != nil {
+		log.Printf("记录操作日志失败: %v", err)
+	}
 }
