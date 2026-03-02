@@ -330,7 +330,12 @@ function formatLogValue(type, value) {
 
 function formatTime(timeStr) {
   if (!timeStr) return ''
-  const date = new Date(timeStr)
+  // 处理 "2006-01-02 15:04:05" 格式，替换空格为T以便正确解析
+  let dateStr = timeStr
+  if (timeStr.includes(' ') && !timeStr.includes('T')) {
+    dateStr = timeStr.replace(' ', 'T') + '+08:00'  // 假设服务器时区为东八区
+  }
+  const date = new Date(dateStr)
   const m = String(date.getMonth() + 1).padStart(2, '0')
   const d = String(date.getDate()).padStart(2, '0')
   const h = String(date.getHours()).padStart(2, '0')
@@ -340,8 +345,7 @@ function formatTime(timeStr) {
 
 function formatOrderNo(orderNo) {
   if (!orderNo) return ''
-  // 订单号格式为 ORD + 时间戳 + userID，只显示后8位
-  return orderNo.length > 8 ? '...' + orderNo.slice(-8) : orderNo
+  return orderNo
 }
 
 function openAddModal() {
