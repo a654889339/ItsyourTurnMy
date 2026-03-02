@@ -1,7 +1,7 @@
 <template>
   <div class="login-page">
     <div class="login-card">
-      <h1 class="login-title">{{ isRegister ? '注册账号' : '财务管理系统' }}</h1>
+      <h1 class="login-title">{{ isRegister ? '注册账号' : '99点单' }}</h1>
 
       <div v-if="errorMsg" class="message message-error">{{ errorMsg }}</div>
       <div v-if="successMsg" class="message message-success">{{ successMsg }}</div>

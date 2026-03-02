@@ -27,26 +27,6 @@ const routes = [
     children: [
       {
         path: '',
-        name: 'Dashboard',
-        component: () => import('../views/Dashboard.vue')
-      },
-      {
-        path: 'accounts',
-        name: 'Accounts',
-        component: () => import('../views/Accounts.vue')
-      },
-      {
-        path: 'transactions',
-        name: 'Transactions',
-        component: () => import('../views/Transactions.vue')
-      },
-      {
-        path: 'reports',
-        name: 'Reports',
-        component: () => import('../views/Reports.vue')
-      },
-      {
-        path: 'dishes',
         name: 'Dishes',
         component: () => import('../views/Dishes.vue')
       },

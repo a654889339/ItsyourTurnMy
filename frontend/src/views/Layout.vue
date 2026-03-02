@@ -1,40 +1,12 @@
 <template>
   <div class="layout">
     <aside class="sidebar">
-      <div class="sidebar-title">财务管理系统</div>
+      <div class="sidebar-title">99点单</div>
       <ul class="sidebar-menu">
         <li
           class="sidebar-menu-item"
           :class="{ active: route.path === '/' }"
           @click="router.push('/')"
-        >
-          首页概览
-        </li>
-        <li
-          class="sidebar-menu-item"
-          :class="{ active: route.path === '/accounts' }"
-          @click="router.push('/accounts')"
-        >
-          账户管理
-        </li>
-        <li
-          class="sidebar-menu-item"
-          :class="{ active: route.path === '/transactions' }"
-          @click="router.push('/transactions')"
-        >
-          收支记录
-        </li>
-        <li
-          class="sidebar-menu-item"
-          :class="{ active: route.path === '/reports' }"
-          @click="router.push('/reports')"
-        >
-          统计报表
-        </li>
-        <li
-          class="sidebar-menu-item"
-          :class="{ active: route.path === '/dishes' }"
-          @click="router.push('/dishes')"
         >
           菜品管理
         </li>
