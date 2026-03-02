@@ -33,7 +33,6 @@ var (
 	dishReportService  *service.DishReportService
 	tableService       *service.TableService
 	publicService      *service.PublicService
-	oplogService       *service.OperationLogService
 )
 
 func main() {
@@ -122,7 +121,6 @@ func main() {
 	dishReportService = service.NewDishReportService()
 	tableService = service.NewTableService()
 	publicService = service.NewPublicService(tableService, dishService)
-	oplogService = service.NewOperationLogService()
 
 	// 创建路由
 	mux := http.NewServeMux()
@@ -174,9 +172,6 @@ func main() {
 	// 菜品报表
 	mux.HandleFunc("/api/v1/dish-reports", authMiddleware(handleDishReports))
 	mux.HandleFunc("/api/v1/dish-reports/trend", authMiddleware(handleDishReportTrend))
-
-	// 操作日志
-	mux.HandleFunc("/api/v1/operation-logs", authMiddleware(handleOperationLogs))
 
 	// 图片上传
 	mux.HandleFunc("/api/v1/upload/image", authMiddleware(handleUploadImage))
@@ -889,10 +884,6 @@ func handleDishes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// 记录操作日志
-		logOperation(r, service.ModuleDish, service.ActionCreate, dish.ID, dish.Name,
-			fmt.Sprintf("新增菜品：%s，价格：%.2f", dish.Name, dish.Price), nil, dish)
-
 		jsonResponse(w, dish)
 
 	default:
@@ -932,38 +923,18 @@ func handleDishByID(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// 获取旧数据用于日志
-		oldDish, _ := dishService.GetDish(r.Context(), userID, dishID)
-
 		dish, err := dishService.UpdateDish(r.Context(), userID, dishID, &req)
 		if err != nil {
 			jsonError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		// 记录操作日志
-		desc := fmt.Sprintf("修改菜品：%s", dish.Name)
-		if req.Status != "" {
-			statusText := map[string]string{"available": "上架", "sold_out": "售罄", "disabled": "下架"}
-			desc = fmt.Sprintf("菜品 %s %s", dish.Name, statusText[req.Status])
-		}
-		logOperation(r, service.ModuleDish, service.ActionUpdate, dish.ID, dish.Name, desc, oldDish, dish)
-
 		jsonResponse(w, dish)
 
 	case "DELETE":
-		// 获取旧数据用于日志
-		oldDish, _ := dishService.GetDish(r.Context(), userID, dishID)
-
 		if err := dishService.DeleteDish(r.Context(), userID, dishID); err != nil {
 			jsonError(w, err.Error(), http.StatusBadRequest)
 			return
-		}
-
-		// 记录操作日志
-		if oldDish != nil {
-			logOperation(r, service.ModuleDish, service.ActionDelete, dishID, oldDish.Name,
-				fmt.Sprintf("删除菜品：%s", oldDish.Name), oldDish, nil)
 		}
 
 		jsonResponse(w, map[string]string{"message": "删除成功"})
@@ -1038,10 +1009,6 @@ func handleOrders(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// 记录操作日志
-		logOperation(r, service.ModuleOrder, service.ActionCreate, order.ID, order.OrderNo,
-			fmt.Sprintf("后台下单：%s，金额：%.2f", order.OrderNo, order.TotalPrice), nil, order)
-
 		jsonResponse(w, order)
 
 	default:
@@ -1071,27 +1038,10 @@ func handleOrderByID(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			// 获取旧订单信息
-			oldOrder, _ := orderService.GetOrder(r.Context(), userID, orderID)
-			oldStatus := ""
-			if oldOrder != nil {
-				oldStatus = oldOrder.Status
-			}
-
 			if err := orderService.UpdateOrderStatus(r.Context(), userID, orderID, req.Status); err != nil {
 				jsonError(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-
-			// 记录操作日志
-			statusText := map[string]string{"pending": "待处理", "confirmed": "已确认", "preparing": "制作中", "completed": "已完成", "cancelled": "已取消"}
-			orderNo := ""
-			if oldOrder != nil {
-				orderNo = oldOrder.OrderNo
-			}
-			logOperation(r, service.ModuleOrder, service.ActionUpdate, orderID, orderNo,
-				fmt.Sprintf("订单 %s 状态变更：%s -> %s", orderNo, statusText[oldStatus], statusText[req.Status]),
-				map[string]string{"status": oldStatus}, map[string]string{"status": req.Status})
 
 			jsonResponse(w, map[string]string{"message": "状态更新成功"})
 			return
@@ -1123,34 +1073,18 @@ func handleOrderByID(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// 获取旧订单信息
-		oldOrder, _ := orderService.GetOrder(r.Context(), userID, orderID)
-
 		order, err := orderService.UpdateOrder(r.Context(), userID, orderID, &req)
 		if err != nil {
 			jsonError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		// 记录操作日志
-		logOperation(r, service.ModuleOrder, service.ActionUpdate, order.ID, order.OrderNo,
-			fmt.Sprintf("修改订单：%s", order.OrderNo), oldOrder, order)
-
 		jsonResponse(w, order)
 
 	case "DELETE":
-		// 获取旧订单信息
-		oldOrder, _ := orderService.GetOrder(r.Context(), userID, orderID)
-
 		if err := orderService.DeleteOrder(r.Context(), userID, orderID); err != nil {
 			jsonError(w, err.Error(), http.StatusBadRequest)
 			return
-		}
-
-		// 记录操作日志
-		if oldOrder != nil {
-			logOperation(r, service.ModuleOrder, service.ActionDelete, orderID, oldOrder.OrderNo,
-				fmt.Sprintf("删除订单：%s", oldOrder.OrderNo), oldOrder, nil)
 		}
 
 		jsonResponse(w, map[string]string{"message": "删除成功"})
@@ -1566,83 +1500,4 @@ func handlePublicTableOrders(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, map[string]interface{}{
 		"orders": orders,
 	})
-}
-
-// handleOperationLogs 处理操作日志
-func handleOperationLogs(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
-		return
-	}
-
-	userID := r.Context().Value("user_id").(int64)
-
-	// 解析查询参数
-	query := r.URL.Query()
-	page, _ := strconv.Atoi(query.Get("page"))
-	pageSize, _ := strconv.Atoi(query.Get("page_size"))
-
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 {
-		pageSize = 20
-	}
-
-	req := &service.ListLogsReq{
-		Module:    query.Get("module"),
-		Action:    query.Get("action"),
-		StartDate: query.Get("start_date"),
-		EndDate:   query.Get("end_date"),
-		Keyword:   query.Get("keyword"),
-		Page:      page,
-		PageSize:  pageSize,
-	}
-
-	log.Printf("操作日志查询: userID=%d, startDate=%s, endDate=%s, module=%s, action=%s",
-		userID, req.StartDate, req.EndDate, req.Module, req.Action)
-
-	logs, total, err := oplogService.ListLogs(userID, req)
-	if err != nil {
-		jsonError(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	jsonResponse(w, map[string]interface{}{
-		"logs":      logs,
-		"total":     total,
-		"page":      page,
-		"page_size": pageSize,
-	})
-}
-
-// logOperation 记录操作日志的辅助函数
-func logOperation(r *http.Request, module, action string, targetID int64, targetName, description string, oldValue, newValue interface{}) {
-	userID, _ := r.Context().Value("user_id").(int64)
-	username, _ := r.Context().Value("username").(string)
-
-	// 获取客户端IP
-	ip := r.Header.Get("X-Forwarded-For")
-	if ip == "" {
-		ip = r.Header.Get("X-Real-IP")
-	}
-	if ip == "" {
-		ip = r.RemoteAddr
-	}
-
-	err := oplogService.Log(service.LogEntry{
-		UserID:      userID,
-		Username:    username,
-		Module:      module,
-		Action:      action,
-		TargetID:    targetID,
-		TargetName:  targetName,
-		Description: description,
-		OldValue:    oldValue,
-		NewValue:    newValue,
-		IP:          ip,
-	})
-	if err != nil {
-		log.Printf("记录操作日志失败: %v", err)
-	}
 }

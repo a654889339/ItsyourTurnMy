@@ -137,22 +137,6 @@ func createTables() error {
 			FOREIGN KEY (order_id) REFERENCES orders(id),
 			FOREIGN KEY (dish_id) REFERENCES dishes(id)
 		)`,
-		// 操作日志表
-		`CREATE TABLE IF NOT EXISTS operation_logs (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL,
-			username TEXT DEFAULT '',
-			module TEXT NOT NULL,
-			action TEXT NOT NULL,
-			target_id INTEGER DEFAULT 0,
-			target_name TEXT DEFAULT '',
-			description TEXT DEFAULT '',
-			old_value TEXT DEFAULT '',
-			new_value TEXT DEFAULT '',
-			ip TEXT DEFAULT '',
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (user_id) REFERENCES users(id)
-		)`,
 		// 创建索引
 		`CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id)`,
@@ -166,9 +150,6 @@ func createTables() error {
 		`CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_operation_logs_user_id ON operation_logs(user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_operation_logs_module ON operation_logs(module)`,
-		`CREATE INDEX IF NOT EXISTS idx_operation_logs_created_at ON operation_logs(created_at)`,
 	}
 
 	for _, query := range queries {

@@ -66,13 +66,6 @@
         >
           销售报表
         </li>
-        <li
-          class="sidebar-menu-item"
-          :class="{ active: route.path === '/operation-logs' }"
-          @click="router.push('/operation-logs')"
-        >
-          操作记录
-        </li>
       </ul>
       <div style="padding: 20px; margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1)">
         <div style="color: rgba(255,255,255,0.6); font-size: 12px; margin-bottom: 8px">
