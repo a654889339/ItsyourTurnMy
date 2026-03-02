@@ -935,9 +935,9 @@ func handleDishByID(w http.ResponseWriter, r *http.Request) {
 
 		// 记录操作日志
 		desc := fmt.Sprintf("修改菜品：%s", dish.Name)
-		if req.Status != nil {
+		if req.Status != "" {
 			statusText := map[string]string{"available": "上架", "sold_out": "售罄", "disabled": "下架"}
-			desc = fmt.Sprintf("菜品 %s %s", dish.Name, statusText[*req.Status])
+			desc = fmt.Sprintf("菜品 %s %s", dish.Name, statusText[req.Status])
 		}
 		logOperation(r, service.ModuleDish, service.ActionUpdate, dish.ID, dish.Name, desc, oldDish, dish)
 
