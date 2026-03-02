@@ -271,7 +271,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// 获取用户名
-		user, _ := authService.GetUserByID(userID)
+		user, _ := authService.GetUserByID(r.Context(), userID)
 		username := ""
 		if user != nil {
 			username = user.Username
