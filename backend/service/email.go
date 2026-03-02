@@ -1,9 +1,11 @@
 package service
 
 import (
+	"crypto/rand"
 	"crypto/tls"
+	"errors"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"net/smtp"
 	"sync"
 	"time"
@@ -24,33 +26,55 @@ var (
 
 // VerificationCode 验证码信息
 type VerificationCode struct {
-	Code      string
-	Email     string
-	ExpiresAt time.Time
-	Used      bool
+	Code        string
+	Email       string
+	ExpiresAt   time.Time
+	Used        bool
+	Attempts    int       // 尝试次数
+	LastAttempt time.Time // 最后尝试时间
+	SendCount   int       // 发送次数
+	FirstSendAt time.Time // 首次发送时间
 }
+
+const (
+	MaxVerifyAttempts  = 5                // 最大验证尝试次数
+	MaxSendPerHour     = 5                // 每小时最大发送次数
+	CodeExpireDuration = 5 * time.Minute  // 验证码有效期
+	LockDuration       = 30 * time.Minute // 锁定时间
+)
 
 // NewEmailService 创建邮件服务
 func NewEmailService(cfg *config.EmailConfig) *EmailService {
 	return &EmailService{config: cfg}
 }
 
-// GenerateCode 生成6位验证码
-func GenerateCode() string {
-	rand.Seed(time.Now().UnixNano())
-	return fmt.Sprintf("%06d", rand.Intn(1000000))
+// GenerateSecureCode 使用 crypto/rand 生成6位安全验证码
+func GenerateSecureCode() (string, error) {
+	max := big.NewInt(1000000)
+	n, err := rand.Int(rand.Reader, max)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%06d", n.Int64()), nil
 }
 
 // SendVerificationCode 发送验证码邮件
 func (s *EmailService) SendVerificationCode(email string) (string, error) {
+	// 检查邮件服务是否启用
 	if !s.config.Enabled {
-		// 如果邮件功能未启用，返回固定验证码用于测试
-		code := "123456"
-		s.storeCode(email, code)
-		return code, nil
+		return "", errors.New("邮件服务未启用，请联系管理员配置邮件服务")
 	}
 
-	code := GenerateCode()
+	// 检查发送频率限制
+	if err := s.checkSendLimit(email); err != nil {
+		return "", err
+	}
+
+	// 生成安全验证码
+	code, err := GenerateSecureCode()
+	if err != nil {
+		return "", fmt.Errorf("生成验证码失败: %w", err)
+	}
 
 	subject := "验证码 - 财务管理系统"
 	body := fmt.Sprintf(`
@@ -80,7 +104,7 @@ func (s *EmailService) SendVerificationCode(email string) (string, error) {
 </html>
 `, code)
 
-	err := s.sendEmail(email, subject, body)
+	err = s.sendEmail(email, subject, body)
 	if err != nil {
 		return "", fmt.Errorf("发送邮件失败: %w", err)
 	}
@@ -91,16 +115,62 @@ func (s *EmailService) SendVerificationCode(email string) (string, error) {
 	return code, nil
 }
 
+// checkSendLimit 检查发送频率限制
+func (s *EmailService) checkSendLimit(email string) error {
+	codesMutex.RLock()
+	vc, exists := verificationCodes[email]
+	codesMutex.RUnlock()
+
+	if !exists {
+		return nil
+	}
+
+	// 检查是否在锁定期间
+	if vc.Attempts >= MaxVerifyAttempts && time.Since(vc.LastAttempt) < LockDuration {
+		remaining := LockDuration - time.Since(vc.LastAttempt)
+		return fmt.Errorf("验证失败次数过多，请 %d 分钟后再试", int(remaining.Minutes())+1)
+	}
+
+	// 检查每小时发送次数
+	if time.Since(vc.FirstSendAt) < time.Hour {
+		if vc.SendCount >= MaxSendPerHour {
+			return errors.New("发送次数过多，请1小时后再试")
+		}
+	}
+
+	return nil
+}
+
 // storeCode 存储验证码
 func (s *EmailService) storeCode(email, code string) {
 	codesMutex.Lock()
 	defer codesMutex.Unlock()
 
-	verificationCodes[email] = &VerificationCode{
-		Code:      code,
-		Email:     email,
-		ExpiresAt: time.Now().Add(5 * time.Minute),
-		Used:      false,
+	now := time.Now()
+	existing, exists := verificationCodes[email]
+
+	if exists && time.Since(existing.FirstSendAt) < time.Hour {
+		// 在1小时内，增加发送计数
+		verificationCodes[email] = &VerificationCode{
+			Code:        code,
+			Email:       email,
+			ExpiresAt:   now.Add(CodeExpireDuration),
+			Used:        false,
+			Attempts:    0, // 重置尝试次数
+			SendCount:   existing.SendCount + 1,
+			FirstSendAt: existing.FirstSendAt,
+		}
+	} else {
+		// 超过1小时，重置计数
+		verificationCodes[email] = &VerificationCode{
+			Code:        code,
+			Email:       email,
+			ExpiresAt:   now.Add(CodeExpireDuration),
+			Used:        false,
+			Attempts:    0,
+			SendCount:   1,
+			FirstSendAt: now,
+		}
 	}
 }
 
@@ -113,6 +183,19 @@ func (s *EmailService) VerifyCode(email, code string) bool {
 	if !exists {
 		return false
 	}
+
+	// 检查是否被锁定
+	if vc.Attempts >= MaxVerifyAttempts {
+		if time.Since(vc.LastAttempt) < LockDuration {
+			return false
+		}
+		// 锁定期过后，重置尝试次数
+		vc.Attempts = 0
+	}
+
+	// 更新尝试次数和时间
+	vc.Attempts++
+	vc.LastAttempt = time.Now()
 
 	if vc.Used {
 		return false
@@ -130,6 +213,23 @@ func (s *EmailService) VerifyCode(email, code string) bool {
 	// 标记为已使用
 	vc.Used = true
 	return true
+}
+
+// GetRemainingAttempts 获取剩余尝试次数
+func (s *EmailService) GetRemainingAttempts(email string) int {
+	codesMutex.RLock()
+	defer codesMutex.RUnlock()
+
+	vc, exists := verificationCodes[email]
+	if !exists {
+		return MaxVerifyAttempts
+	}
+
+	remaining := MaxVerifyAttempts - vc.Attempts
+	if remaining < 0 {
+		remaining = 0
+	}
+	return remaining
 }
 
 // sendEmail 发送邮件
@@ -221,7 +321,8 @@ func CleanExpiredCodes() {
 
 	now := time.Now()
 	for email, vc := range verificationCodes {
-		if now.After(vc.ExpiresAt) || vc.Used {
+		// 清理已使用或过期超过1小时的验证码
+		if vc.Used || now.Sub(vc.ExpiresAt) > time.Hour {
 			delete(verificationCodes, email)
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -30,6 +31,8 @@ var (
 	orderService       *service.OrderService
 	uploadService      *service.UploadService
 	dishReportService  *service.DishReportService
+	tableService       *service.TableService
+	publicService      *service.PublicService
 )
 
 func main() {
@@ -98,6 +101,9 @@ func main() {
 	}
 	defer database.Close()
 
+	// 初始化速率限制器
+	service.InitRateLimiters()
+
 	// 初始化服务
 	authService = service.NewAuthService()
 	// 设置JWT密钥
@@ -113,6 +119,8 @@ func main() {
 	orderService = service.NewOrderService(dishService)
 	uploadService = service.NewUploadService("./uploads", "")
 	dishReportService = service.NewDishReportService()
+	tableService = service.NewTableService()
+	publicService = service.NewPublicService(tableService, dishService)
 
 	// 创建路由
 	mux := http.NewServeMux()
@@ -151,6 +159,14 @@ func main() {
 	// 订单管理
 	mux.HandleFunc("/api/v1/orders", authMiddleware(handleOrders))
 	mux.HandleFunc("/api/v1/orders/", authMiddleware(handleOrderByID))
+
+	// 餐桌管理
+	mux.HandleFunc("/api/v1/tables", authMiddleware(handleTables))
+	mux.HandleFunc("/api/v1/tables/", authMiddleware(handleTableByID))
+
+	// 公开API（扫码点单，无需登录）
+	mux.HandleFunc("/api/v1/public/menu/", handlePublicMenu)
+	mux.HandleFunc("/api/v1/public/order/", handlePublicOrder)
 
 	// 菜品报表
 	mux.HandleFunc("/api/v1/dish-reports", authMiddleware(handleDishReports))
@@ -283,10 +299,44 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 
 // ==================== 认证处理 ====================
 
+// getClientIP 获取客户端真实IP
+func getClientIP(r *http.Request) string {
+	// 优先从 X-Forwarded-For 获取（反向代理场景）
+	xff := r.Header.Get("X-Forwarded-For")
+	if xff != "" {
+		// X-Forwarded-For 可能包含多个IP，取第一个
+		ips := strings.Split(xff, ",")
+		if len(ips) > 0 {
+			return strings.TrimSpace(ips[0])
+		}
+	}
+
+	// 其次从 X-Real-IP 获取
+	xri := r.Header.Get("X-Real-IP")
+	if xri != "" {
+		return xri
+	}
+
+	// 最后从 RemoteAddr 获取
+	ip := r.RemoteAddr
+	// 去掉端口号
+	if colonIdx := strings.LastIndex(ip, ":"); colonIdx != -1 {
+		ip = ip[:colonIdx]
+	}
+	return ip
+}
+
 // 发送邮箱验证码
 func handleSendVerificationCode(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 速率限制检查
+	clientIP := getClientIP(r)
+	if allowed, remaining := service.SendCodeRateLimiter.Allow(clientIP); !allowed {
+		jsonError(w, fmt.Sprintf("请求过于频繁，请 %d 秒后再试", remaining), http.StatusTooManyRequests)
 		return
 	}
 
@@ -327,6 +377,13 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 速率限制检查
+	clientIP := getClientIP(r)
+	if allowed, remaining := service.RegisterRateLimiter.Allow(clientIP); !allowed {
+		jsonError(w, fmt.Sprintf("请求过于频繁，请 %d 秒后再试", remaining), http.StatusTooManyRequests)
+		return
+	}
+
 	var req struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -362,6 +419,13 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 速率限制检查
+	clientIP := getClientIP(r)
+	if allowed, remaining := service.LoginRateLimiter.Allow(clientIP); !allowed {
+		jsonError(w, fmt.Sprintf("登录尝试过于频繁，请 %d 秒后再试", remaining), http.StatusTooManyRequests)
 		return
 	}
 
@@ -1141,4 +1205,236 @@ func handleDishReportTrend(w http.ResponseWriter, r *http.Request) {
 		"count":  count,
 		"data":   trend,
 	})
+}
+
+// ==================== 餐桌管理处理 ====================
+
+func handleTables(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+
+	switch r.Method {
+	case "GET":
+		status := r.URL.Query().Get("status")
+		tables, err := tableService.ListTables(r.Context(), userID, status)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		jsonResponse(w, map[string]interface{}{
+			"tables": tables,
+		})
+
+	case "POST":
+		var req struct {
+			TableNo  string `json:"table_no"`
+			Capacity int    `json:"capacity"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonError(w, "无效的请求", http.StatusBadRequest)
+			return
+		}
+
+		table, err := tableService.CreateTable(r.Context(), userID, req.TableNo, req.Capacity)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		jsonResponse(w, table)
+
+	default:
+		jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+	}
+}
+
+func handleTableByID(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/tables/")
+
+	// 处理 /api/v1/tables/{id}/regenerate
+	if strings.HasSuffix(path, "/regenerate") {
+		idStr := strings.TrimSuffix(path, "/regenerate")
+		tableID, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			jsonError(w, "无效的餐桌ID", http.StatusBadRequest)
+			return
+		}
+
+		if r.Method != "POST" {
+			jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+			return
+		}
+
+		token, err := tableService.RegenerateToken(r.Context(), userID, tableID)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		jsonResponse(w, map[string]string{
+			"token": token,
+		})
+		return
+	}
+
+	// 处理 /api/v1/tables/{id}/qrcode
+	if strings.HasSuffix(path, "/qrcode") {
+		idStr := strings.TrimSuffix(path, "/qrcode")
+		tableID, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			jsonError(w, "无效的餐桌ID", http.StatusBadRequest)
+			return
+		}
+
+		if r.Method != "GET" {
+			jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+			return
+		}
+
+		token, err := tableService.GetTableToken(r.Context(), userID, tableID)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		jsonResponse(w, map[string]string{
+			"token": token,
+		})
+		return
+	}
+
+	// 处理 /api/v1/tables/{id}
+	tableID, err := strconv.ParseInt(path, 10, 64)
+	if err != nil {
+		jsonError(w, "无效的餐桌ID", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case "GET":
+		table, err := tableService.GetTableByID(tableID)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if table.UserID != userID {
+			jsonError(w, "无权访问此餐桌", http.StatusForbidden)
+			return
+		}
+		jsonResponse(w, table)
+
+	case "PUT":
+		var req struct {
+			TableNo  string `json:"table_no"`
+			Capacity int    `json:"capacity"`
+			Status   string `json:"status"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonError(w, "无效的请求", http.StatusBadRequest)
+			return
+		}
+
+		table, err := tableService.UpdateTable(r.Context(), userID, tableID, req.TableNo, req.Capacity, req.Status)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		jsonResponse(w, table)
+
+	case "DELETE":
+		if err := tableService.DeleteTable(r.Context(), userID, tableID); err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		jsonResponse(w, map[string]string{"message": "删除成功"})
+
+	default:
+		jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+	}
+}
+
+// ==================== 公开API处理（扫码点单） ====================
+
+func handlePublicMenu(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 速率限制
+	clientIP := getClientIP(r)
+	if allowed, remaining := service.PublicAPIRateLimiter.Allow(clientIP); !allowed {
+		jsonError(w, fmt.Sprintf("请求过于频繁，请 %d 秒后再试", remaining), http.StatusTooManyRequests)
+		return
+	}
+
+	// 获取token
+	token := strings.TrimPrefix(r.URL.Path, "/api/v1/public/menu/")
+	if token == "" {
+		jsonError(w, "缺少二维码令牌", http.StatusBadRequest)
+		return
+	}
+
+	menu, _, err := publicService.GetPublicMenu(token)
+	if err != nil {
+		jsonError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	jsonResponse(w, menu)
+}
+
+func handlePublicOrder(w http.ResponseWriter, r *http.Request) {
+	// 速率限制
+	clientIP := getClientIP(r)
+	if allowed, remaining := service.PublicAPIRateLimiter.Allow(clientIP); !allowed {
+		jsonError(w, fmt.Sprintf("请求过于频繁，请 %d 秒后再试", remaining), http.StatusTooManyRequests)
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/public/order/")
+	parts := strings.Split(path, "/")
+
+	if len(parts) < 1 || parts[0] == "" {
+		jsonError(w, "缺少二维码令牌", http.StatusBadRequest)
+		return
+	}
+
+	token := parts[0]
+
+	// POST /api/v1/public/order/{token} - 提交订单
+	if r.Method == "POST" && len(parts) == 1 {
+		var req service.PublicOrderRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonError(w, "无效的请求", http.StatusBadRequest)
+			return
+		}
+
+		order, err := publicService.CreatePublicOrder(token, &req)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		jsonResponse(w, order)
+		return
+	}
+
+	// GET /api/v1/public/order/{token}/{orderNo} - 查询订单状态
+	if r.Method == "GET" && len(parts) == 2 {
+		orderNo := parts[1]
+		status, err := publicService.GetPublicOrderStatus(token, orderNo)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		jsonResponse(w, status)
+		return
+	}
+
+	jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
 }

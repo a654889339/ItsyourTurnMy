@@ -40,6 +40,13 @@
         </li>
         <li
           class="sidebar-menu-item"
+          :class="{ active: route.path === '/tables' }"
+          @click="router.push('/tables')"
+        >
+          餐桌管理
+        </li>
+        <li
+          class="sidebar-menu-item"
           :class="{ active: route.path === '/menu' }"
           @click="router.push('/menu')"
         >

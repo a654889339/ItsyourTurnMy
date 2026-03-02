@@ -100,12 +100,12 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int64, req *Creat
 		})
 	}
 
-	// 创建订单
+	// 创建订单（后台下单，不关联餐桌）
 	now := time.Now()
 	result, err := tx.Exec(`
-		INSERT INTO orders (user_id, order_no, total_price, status, remark, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, userID, orderNo, totalPrice, "pending", req.Remark, now, now)
+		INSERT INTO orders (user_id, table_id, table_no, order_no, total_price, status, order_source, customer_name, remark, created_at, updated_at)
+		VALUES (?, NULL, '', ?, ?, 'pending', 'admin', '', ?, ?, ?)
+	`, userID, orderNo, totalPrice, req.Remark, now, now)
 
 	if err != nil {
 		return nil, err
@@ -139,27 +139,29 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int64, req *Creat
 	}
 
 	return &model.Order{
-		ID:         orderID,
-		UserID:     userID,
-		OrderNo:    orderNo,
-		TotalPrice: totalPrice,
-		Status:     "pending",
-		Remark:     req.Remark,
-		Items:      orderItems,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		ID:          orderID,
+		UserID:      userID,
+		OrderNo:     orderNo,
+		TotalPrice:  totalPrice,
+		Status:      "pending",
+		OrderSource: "admin",
+		Remark:      req.Remark,
+		Items:       orderItems,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}, nil
 }
 
 // GetOrder 获取订单详情
 func (s *OrderService) GetOrder(ctx context.Context, userID, orderID int64) (*model.Order, error) {
 	var order model.Order
+	var tableID sql.NullInt64
 	err := database.DB.QueryRow(`
-		SELECT id, user_id, order_no, total_price, status, remark, created_at, updated_at
+		SELECT id, user_id, table_id, table_no, order_no, total_price, status, order_source, customer_name, remark, created_at, updated_at
 		FROM orders WHERE id = ? AND user_id = ?
 	`, orderID, userID).Scan(
-		&order.ID, &order.UserID, &order.OrderNo, &order.TotalPrice,
-		&order.Status, &order.Remark, &order.CreatedAt, &order.UpdatedAt,
+		&order.ID, &order.UserID, &tableID, &order.TableNo, &order.OrderNo, &order.TotalPrice,
+		&order.Status, &order.OrderSource, &order.CustomerName, &order.Remark, &order.CreatedAt, &order.UpdatedAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -167,6 +169,10 @@ func (s *OrderService) GetOrder(ctx context.Context, userID, orderID int64) (*mo
 	}
 	if err != nil {
 		return nil, err
+	}
+
+	if tableID.Valid {
+		order.TableID = &tableID.Int64
 	}
 
 	// 获取订单项
@@ -192,26 +198,58 @@ func (s *OrderService) GetOrder(ctx context.Context, userID, orderID int64) (*mo
 	return &order, nil
 }
 
+// ListOrdersReq 订单列表查询参数
+type ListOrdersReq struct {
+	Status      string // 订单状态筛选
+	OrderSource string // 订单来源筛选 (admin/scan)
+	TableID     int64  // 餐桌ID筛选
+	Page        int
+	PageSize    int
+}
+
 // ListOrders 获取订单列表
 func (s *OrderService) ListOrders(ctx context.Context, userID int64, status string, page, pageSize int) ([]*model.Order, int64, error) {
-	if page < 1 {
-		page = 1
+	return s.ListOrdersWithFilter(ctx, userID, &ListOrdersReq{
+		Status:   status,
+		Page:     page,
+		PageSize: pageSize,
+	})
+}
+
+// ListOrdersWithFilter 带筛选条件获取订单列表
+func (s *OrderService) ListOrdersWithFilter(ctx context.Context, userID int64, req *ListOrdersReq) ([]*model.Order, int64, error) {
+	if req.Page < 1 {
+		req.Page = 1
 	}
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
+	if req.PageSize < 1 || req.PageSize > 100 {
+		req.PageSize = 20
 	}
 
 	// 构建查询
-	query := "SELECT id, user_id, order_no, total_price, status, remark, created_at, updated_at FROM orders WHERE user_id = ?"
+	query := "SELECT id, user_id, table_id, table_no, order_no, total_price, status, order_source, customer_name, remark, created_at, updated_at FROM orders WHERE user_id = ?"
 	countQuery := "SELECT COUNT(*) FROM orders WHERE user_id = ?"
 	args := []interface{}{userID}
 	countArgs := []interface{}{userID}
 
-	if status != "" {
+	if req.Status != "" {
 		query += " AND status = ?"
 		countQuery += " AND status = ?"
-		args = append(args, status)
-		countArgs = append(countArgs, status)
+		args = append(args, req.Status)
+		countArgs = append(countArgs, req.Status)
+	}
+
+	if req.OrderSource != "" {
+		query += " AND order_source = ?"
+		countQuery += " AND order_source = ?"
+		args = append(args, req.OrderSource)
+		countArgs = append(countArgs, req.OrderSource)
+	}
+
+	if req.TableID > 0 {
+		query += " AND table_id = ?"
+		countQuery += " AND table_id = ?"
+		args = append(args, req.TableID)
+		countArgs = append(countArgs, req.TableID)
 	}
 
 	// 获取总数
@@ -223,7 +261,7 @@ func (s *OrderService) ListOrders(ctx context.Context, userID int64, status stri
 
 	// 分页查询
 	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
-	args = append(args, pageSize, (page-1)*pageSize)
+	args = append(args, req.PageSize, (req.Page-1)*req.PageSize)
 
 	rows, err := database.DB.Query(query, args...)
 	if err != nil {
@@ -234,10 +272,15 @@ func (s *OrderService) ListOrders(ctx context.Context, userID int64, status stri
 	var orders []*model.Order
 	for rows.Next() {
 		var order model.Order
-		err := rows.Scan(&order.ID, &order.UserID, &order.OrderNo, &order.TotalPrice,
-			&order.Status, &order.Remark, &order.CreatedAt, &order.UpdatedAt)
+		var tableID sql.NullInt64
+		err := rows.Scan(&order.ID, &order.UserID, &tableID, &order.TableNo, &order.OrderNo, &order.TotalPrice,
+			&order.Status, &order.OrderSource, &order.CustomerName, &order.Remark, &order.CreatedAt, &order.UpdatedAt)
 		if err != nil {
 			return nil, 0, err
+		}
+
+		if tableID.Valid {
+			order.TableID = &tableID.Int64
 		}
 
 		// 获取订单项

@@ -4,19 +4,26 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"regexp"
 	"time"
 
 	"finance-system/database"
 	"finance-system/model"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
-var jwtSecret = []byte("your-secret-key-change-in-production")
+var jwtSecret []byte
 
-// SetJWTSecret 设置JWT密钥
+// SetJWTSecret 设置JWT密钥（必须调用）
 func SetJWTSecret(secret string) {
+	if secret == "" {
+		panic("JWT密钥不能为空，请设置 JWT_SECRET 环境变量")
+	}
+	if len(secret) < 32 {
+		panic("JWT密钥长度至少32位")
+	}
 	jwtSecret = []byte(secret)
 }
 
@@ -28,8 +35,54 @@ func NewAuthService() *AuthService {
 	return &AuthService{}
 }
 
+// ValidateUsername 验证用户名格式
+func ValidateUsername(username string) error {
+	if len(username) < 3 || len(username) > 20 {
+		return errors.New("用户名长度必须在3-20位之间")
+	}
+	matched, _ := regexp.MatchString(`^[a-zA-Z0-9_]+$`, username)
+	if !matched {
+		return errors.New("用户名只能包含字母、数字和下划线")
+	}
+	return nil
+}
+
+// ValidatePassword 验证密码强度
+func ValidatePassword(password string) error {
+	if len(password) < 6 {
+		return errors.New("密码长度至少6位")
+	}
+	if len(password) > 50 {
+		return errors.New("密码长度不能超过50位")
+	}
+	return nil
+}
+
+// ValidateEmail 验证邮箱格式
+func ValidateEmail(email string) error {
+	if len(email) > 100 {
+		return errors.New("邮箱长度不能超过100位")
+	}
+	matched, _ := regexp.MatchString(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`, email)
+	if !matched {
+		return errors.New("邮箱格式不正确")
+	}
+	return nil
+}
+
 // Register 用户注册
 func (s *AuthService) Register(ctx context.Context, username, password, email string) (*model.User, error) {
+	// 验证输入
+	if err := ValidateUsername(username); err != nil {
+		return nil, err
+	}
+	if err := ValidatePassword(password); err != nil {
+		return nil, err
+	}
+	if err := ValidateEmail(email); err != nil {
+		return nil, err
+	}
+
 	// 检查用户名是否存在
 	var existingID int64
 	err := database.DB.QueryRow("SELECT id FROM users WHERE username = ?", username).Scan(&existingID)
@@ -129,6 +182,10 @@ func (s *AuthService) GetUserByID(ctx context.Context, userID int64) (*model.Use
 
 // generateToken 生成JWT Token
 func (s *AuthService) generateToken(userID int64) (string, error) {
+	if jwtSecret == nil {
+		return "", errors.New("JWT密钥未配置")
+	}
+
 	claims := jwt.MapClaims{
 		"user_id": userID,
 		"exp":     time.Now().Add(24 * time.Hour).Unix(),
@@ -141,6 +198,10 @@ func (s *AuthService) generateToken(userID int64) (string, error) {
 
 // ValidateToken 验证JWT Token
 func (s *AuthService) ValidateToken(tokenString string) (int64, error) {
+	if jwtSecret == nil {
+		return 0, errors.New("JWT密钥未配置")
+	}
+
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("无效的签名方法")

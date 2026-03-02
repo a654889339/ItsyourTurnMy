@@ -192,6 +192,71 @@ const api = {
 
   uploadBase64Image(base64Data) {
     return instance.post('/upload/image', { image: base64Data })
+  },
+
+  // 餐桌管理
+  getTables(status = '') {
+    return instance.get('/tables', { params: { status } })
+  },
+
+  getTable(id) {
+    return instance.get(`/tables/${id}`)
+  },
+
+  createTable(data) {
+    return instance.post('/tables', data)
+  },
+
+  updateTable(id, data) {
+    return instance.put(`/tables/${id}`, data)
+  },
+
+  deleteTable(id) {
+    return instance.delete(`/tables/${id}`)
+  },
+
+  regenerateTableToken(id) {
+    return instance.post(`/tables/${id}/regenerate`)
+  },
+
+  getTableQRCode(id) {
+    return instance.get(`/tables/${id}/qrcode`)
+  }
+}
+
+// 公开API（无需登录）
+const publicInstance = axios.create({
+  baseURL: '/api/v1/public',
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+
+publicInstance.interceptors.response.use(
+  (response) => response.data,
+  (error) => {
+    if (error.response) {
+      throw new Error(error.response.data.message || '请求失败')
+    }
+    throw error
+  }
+)
+
+export const publicApi = {
+  // 获取菜单
+  getMenu(token) {
+    return publicInstance.get(`/menu/${token}`)
+  },
+
+  // 提交订单
+  createOrder(token, data) {
+    return publicInstance.post(`/order/${token}`, data)
+  },
+
+  // 查询订单状态
+  getOrderStatus(token, orderNo) {
+    return publicInstance.get(`/order/${token}/${orderNo}`)
   }
 }
 

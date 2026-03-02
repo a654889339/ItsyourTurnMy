@@ -92,17 +92,33 @@ type Dish struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+// Table 餐桌模型
+type Table struct {
+	ID          int64     `json:"id"`
+	UserID      int64     `json:"user_id"`
+	TableNo     string    `json:"table_no"`                // 桌号，如 "A01", "1号桌"
+	QRCodeToken string    `json:"-"`                       // 二维码令牌（不返回给前端）
+	Status      string    `json:"status"`                  // active, disabled
+	Capacity    int       `json:"capacity"`                // 座位数
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 // Order 点餐订单模型
 type Order struct {
-	ID         int64       `json:"id"`
-	UserID     int64       `json:"user_id"`
-	OrderNo    string      `json:"order_no"`    // 订单编号
-	TotalPrice float64     `json:"total_price"` // 订单总价
-	Status     string      `json:"status"`      // pending, confirmed, preparing, completed, cancelled
-	Remark     string      `json:"remark"`      // 订单备注
-	Items      []OrderItem `json:"items"`       // 订单项
-	CreatedAt  time.Time   `json:"created_at"`
-	UpdatedAt  time.Time   `json:"updated_at"`
+	ID           int64       `json:"id"`
+	UserID       int64       `json:"user_id"`
+	TableID      *int64      `json:"table_id,omitempty"`   // 餐桌ID（可为空）
+	TableNo      string      `json:"table_no"`             // 桌号（冗余存储）
+	OrderNo      string      `json:"order_no"`             // 订单编号
+	TotalPrice   float64     `json:"total_price"`          // 订单总价
+	Status       string      `json:"status"`               // pending, confirmed, preparing, completed, cancelled
+	OrderSource  string      `json:"order_source"`         // admin: 后台下单, scan: 扫码下单
+	CustomerName string      `json:"customer_name"`        // 顾客称呼
+	Remark       string      `json:"remark"`               // 订单备注
+	Items        []OrderItem `json:"items"`                // 订单项
+	CreatedAt    time.Time   `json:"created_at"`
+	UpdatedAt    time.Time   `json:"updated_at"`
 }
 
 // OrderItem 订单项模型

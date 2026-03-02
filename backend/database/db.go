@@ -94,17 +94,35 @@ func createTables() error {
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (user_id) REFERENCES users(id)
 		)`,
+		// 餐桌表
+		`CREATE TABLE IF NOT EXISTS tables (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			table_no TEXT NOT NULL,
+			qr_code_token TEXT UNIQUE NOT NULL,
+			status TEXT DEFAULT 'active',
+			capacity INTEGER DEFAULT 4,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id),
+			UNIQUE(user_id, table_no)
+		)`,
 		// 订单表
 		`CREATE TABLE IF NOT EXISTS orders (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id INTEGER NOT NULL,
+			table_id INTEGER,
+			table_no TEXT DEFAULT '',
 			order_no TEXT UNIQUE NOT NULL,
 			total_price REAL NOT NULL,
 			status TEXT DEFAULT 'pending',
+			order_source TEXT DEFAULT 'admin',
+			customer_name TEXT DEFAULT '',
 			remark TEXT DEFAULT '',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (user_id) REFERENCES users(id)
+			FOREIGN KEY (user_id) REFERENCES users(id),
+			FOREIGN KEY (table_id) REFERENCES tables(id)
 		)`,
 		// 订单项表
 		`CREATE TABLE IF NOT EXISTS order_items (
@@ -127,8 +145,12 @@ func createTables() error {
 		`CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_dishes_user_id ON dishes(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_dishes_category ON dishes(category)`,
+		`CREATE INDEX IF NOT EXISTS idx_tables_user_id ON tables(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_tables_qr_code_token ON tables(qr_code_token)`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_orders_table_id ON orders(table_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_orders_order_source ON orders(order_source)`,
 		`CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id)`,
 	}
 
