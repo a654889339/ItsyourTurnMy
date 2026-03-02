@@ -137,6 +137,17 @@ func createTables() error {
 			FOREIGN KEY (order_id) REFERENCES orders(id),
 			FOREIGN KEY (dish_id) REFERENCES dishes(id)
 		)`,
+		// 菜品变化记录表
+		`CREATE TABLE IF NOT EXISTS dish_change_logs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			dish_id INTEGER NOT NULL,
+			type TEXT NOT NULL,
+			old_value REAL NOT NULL,
+			new_value REAL NOT NULL,
+			remark TEXT DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (dish_id) REFERENCES dishes(id)
+		)`,
 		// 创建索引
 		`CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id)`,
@@ -150,6 +161,7 @@ func createTables() error {
 		`CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_dish_change_logs_dish_id ON dish_change_logs(dish_id)`,
 	}
 
 	for _, query := range queries {

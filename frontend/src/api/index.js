@@ -151,6 +151,10 @@ const api = {
     return instance.get('/dishes/categories')
   },
 
+  getDishChangeLogs(dishId) {
+    return instance.get(`/dishes/${dishId}/change-logs`)
+  },
+
   // 订单相关
   getOrders(params = {}) {
     return instance.get('/orders', { params })

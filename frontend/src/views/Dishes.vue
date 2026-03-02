@@ -40,6 +40,12 @@
       </div>
       <div v-else class="dishes-grid">
         <div v-for="dish in dishes" :key="dish.id" class="dish-card">
+          <button class="dish-history-btn" @click="showChangeLogs(dish)" title="查看变化记录">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+          </button>
           <div class="dish-image">
             <img v-if="dish.image" :src="dish.image" :alt="dish.name" />
             <div v-else class="dish-image-placeholder">暂无图片</div>
@@ -158,6 +164,38 @@
         </form>
       </div>
     </div>
+
+    <!-- 变化记录弹窗 -->
+    <div v-if="showChangeLogsModal" class="modal-overlay" @click.self="showChangeLogsModal = false">
+      <div class="modal" style="max-width: 500px;">
+        <div class="modal-header">
+          <h3 class="modal-title">{{ currentDishName }} - 变化记录</h3>
+          <button class="modal-close" @click="showChangeLogsModal = false">&times;</button>
+        </div>
+        <div class="change-logs-content">
+          <div v-if="changeLogsLoading" class="loading">加载中...</div>
+          <div v-else-if="changeLogs.length === 0" class="empty-state" style="padding: 20px;">
+            暂无变化记录
+          </div>
+          <div v-else class="change-logs-list">
+            <div v-for="log in changeLogs" :key="log.id" class="change-log-item">
+              <div class="change-log-type" :class="log.type">
+                {{ log.type === 'stock' ? '库存' : '价格' }}
+              </div>
+              <div class="change-log-detail">
+                <span class="old-value">{{ formatLogValue(log.type, log.old_value) }}</span>
+                <span class="arrow">→</span>
+                <span class="new-value">{{ formatLogValue(log.type, log.new_value) }}</span>
+              </div>
+              <div class="change-log-meta">
+                <span class="remark">{{ log.remark }}</span>
+                <span class="time">{{ formatTime(log.created_at) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -175,6 +213,12 @@ const editingDish = ref(null)
 const fileInput = ref(null)
 const imagePreview = ref('')
 const selectedFile = ref(null)
+
+// 变化记录相关
+const showChangeLogsModal = ref(false)
+const changeLogsLoading = ref(false)
+const changeLogs = ref([])
+const currentDishName = ref('')
 
 const page = ref(1)
 const pageSize = ref(20)
@@ -255,6 +299,40 @@ async function fetchCategories() {
 function changePage(newPage) {
   page.value = newPage
   fetchDishes()
+}
+
+// 显示变化记录
+async function showChangeLogs(dish) {
+  currentDishName.value = dish.name
+  showChangeLogsModal.value = true
+  changeLogsLoading.value = true
+  changeLogs.value = []
+
+  try {
+    const res = await api.getDishChangeLogs(dish.id)
+    changeLogs.value = res.logs || []
+  } catch (error) {
+    console.error('获取变化记录失败:', error)
+  } finally {
+    changeLogsLoading.value = false
+  }
+}
+
+function formatLogValue(type, value) {
+  if (type === 'price') {
+    return '¥' + Number(value).toFixed(2)
+  }
+  return Math.round(value)
+}
+
+function formatTime(timeStr) {
+  if (!timeStr) return ''
+  const date = new Date(timeStr)
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  const h = String(date.getHours()).padStart(2, '0')
+  const min = String(date.getMinutes()).padStart(2, '0')
+  return `${m}-${d} ${h}:${min}`
 }
 
 function openAddModal() {
@@ -399,11 +477,35 @@ onMounted(() => {
 }
 
 .dish-card {
+  position: relative;
   background: #fff;
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.dish-history-btn {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.9);
+  color: #666;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.dish-history-btn:hover {
+  background: #1890ff;
+  color: #fff;
 }
 
 .dish-card:hover {
@@ -570,5 +672,73 @@ onMounted(() => {
 .image-placeholder:hover {
   border-color: #1890ff;
   color: #1890ff;
+}
+
+/* 变化记录弹窗样式 */
+.change-logs-content {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.change-logs-list {
+  padding: 10px 20px;
+}
+
+.change-log-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f0f0;
+  align-items: center;
+}
+
+.change-log-item:last-child {
+  border-bottom: none;
+}
+
+.change-log-type {
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.change-log-type.stock {
+  background: #e6f7ff;
+  color: #1890ff;
+}
+
+.change-log-type.price {
+  background: #fff7e6;
+  color: #fa8c16;
+}
+
+.change-log-detail {
+  flex: 1;
+  font-size: 14px;
+}
+
+.change-log-detail .old-value {
+  color: #999;
+  text-decoration: line-through;
+}
+
+.change-log-detail .arrow {
+  margin: 0 8px;
+  color: #999;
+}
+
+.change-log-detail .new-value {
+  color: #333;
+  font-weight: 500;
+}
+
+.change-log-meta {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #999;
 }
 </style>

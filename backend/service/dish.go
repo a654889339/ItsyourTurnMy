@@ -67,9 +67,11 @@ type CreateDishReq struct {
 
 // UpdateDish 更新菜品
 func (s *DishService) UpdateDish(ctx context.Context, userID, dishID int64, req *UpdateDishReq) (*model.Dish, error) {
-	// 检查菜品是否属于该用户
+	// 获取旧的菜品信息
+	var oldPrice float64
+	var oldStock int
 	var existingUserID int64
-	err := database.DB.QueryRow("SELECT user_id FROM dishes WHERE id = ?", dishID).Scan(&existingUserID)
+	err := database.DB.QueryRow("SELECT user_id, price, stock FROM dishes WHERE id = ?", dishID).Scan(&existingUserID, &oldPrice, &oldStock)
 	if err == sql.ErrNoRows {
 		return nil, errors.New("菜品不存在")
 	}
@@ -81,6 +83,24 @@ func (s *DishService) UpdateDish(ctx context.Context, userID, dishID int64, req 
 	}
 
 	now := time.Now()
+	nowStr := now.Format("2006-01-02 15:04:05")
+
+	// 记录价格变化
+	if req.Price != oldPrice {
+		database.DB.Exec(`
+			INSERT INTO dish_change_logs (dish_id, type, old_value, new_value, remark, created_at)
+			VALUES (?, 'price', ?, ?, '手动调整', ?)
+		`, dishID, oldPrice, req.Price, nowStr)
+	}
+
+	// 记录库存变化
+	if req.Stock != oldStock {
+		database.DB.Exec(`
+			INSERT INTO dish_change_logs (dish_id, type, old_value, new_value, remark, created_at)
+			VALUES (?, 'stock', ?, ?, '手动调整', ?)
+		`, dishID, float64(oldStock), float64(req.Stock), nowStr)
+	}
+
 	_, err = database.DB.Exec(`
 		UPDATE dishes SET name = ?, description = ?, price = ?, image = ?, category = ?, dietary_tags = ?, stock = ?, status = ?, sort_order = ?, updated_at = ?
 		WHERE id = ?
@@ -246,4 +266,49 @@ func (s *DishService) UpdateDishStock(ctx context.Context, userID, dishID int64,
 	}
 
 	return nil
+}
+
+// GetDishChangeLogs 获取菜品变化记录
+func (s *DishService) GetDishChangeLogs(ctx context.Context, userID, dishID int64) ([]*model.DishChangeLog, error) {
+	// 先检查菜品是否属于该用户
+	var existingUserID int64
+	err := database.DB.QueryRow("SELECT user_id FROM dishes WHERE id = ?", dishID).Scan(&existingUserID)
+	if err == sql.ErrNoRows {
+		return nil, errors.New("菜品不存在")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if existingUserID != userID {
+		return nil, errors.New("无权查看此菜品")
+	}
+
+	rows, err := database.DB.Query(`
+		SELECT id, dish_id, type, old_value, new_value, remark, created_at
+		FROM dish_change_logs WHERE dish_id = ? ORDER BY created_at DESC LIMIT 50
+	`, dishID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var logs []*model.DishChangeLog
+	for rows.Next() {
+		var log model.DishChangeLog
+		if err := rows.Scan(&log.ID, &log.DishID, &log.Type, &log.OldValue, &log.NewValue, &log.Remark, &log.CreatedAt); err != nil {
+			return nil, err
+		}
+		logs = append(logs, &log)
+	}
+
+	return logs, nil
+}
+
+// LogDishStockChange 记录库存变化（供订单服务调用）
+func (s *DishService) LogDishStockChange(dishID int64, oldStock, newStock int, remark string) {
+	nowStr := time.Now().Format("2006-01-02 15:04:05")
+	database.DB.Exec(`
+		INSERT INTO dish_change_logs (dish_id, type, old_value, new_value, remark, created_at)
+		VALUES (?, 'stock', ?, ?, ?, ?)
+	`, dishID, float64(oldStock), float64(newStock), remark, nowStr)
 }

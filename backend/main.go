@@ -900,6 +900,29 @@ func handleDishByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 处理 /api/v1/dishes/{id}/change-logs 路由
+	if strings.Contains(r.URL.Path, "/change-logs") {
+		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/v1/dishes/"), "/")
+		if len(parts) >= 1 {
+			dishID, err := strconv.ParseInt(parts[0], 10, 64)
+			if err != nil {
+				jsonError(w, "无效的菜品ID", http.StatusBadRequest)
+				return
+			}
+			if r.Method == "GET" {
+				logs, err := dishService.GetDishChangeLogs(r.Context(), userID, dishID)
+				if err != nil {
+					jsonError(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				jsonResponse(w, map[string]interface{}{"logs": logs})
+				return
+			}
+		}
+		jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
 	idStr := strings.TrimPrefix(r.URL.Path, "/api/v1/dishes/")
 	dishID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {

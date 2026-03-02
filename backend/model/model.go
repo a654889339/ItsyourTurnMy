@@ -132,3 +132,14 @@ type OrderItem struct {
 	Quantity  int     `json:"quantity"` // 数量
 	Remark    string  `json:"remark"`   // 单项备注（如：少辣、多葱等）
 }
+
+// DishChangeLog 菜品变化记录
+type DishChangeLog struct {
+	ID        int64     `json:"id"`
+	DishID    int64     `json:"dish_id"`
+	Type      string    `json:"type"`      // stock: 库存变化, price: 价格变化
+	OldValue  float64   `json:"old_value"` // 旧值
+	NewValue  float64   `json:"new_value"` // 新值
+	Remark    string    `json:"remark"`    // 备注（如：下单扣减、手动调整）
+	CreatedAt time.Time `json:"created_at"`
+}
