@@ -1599,6 +1599,9 @@ func handleOperationLogs(w http.ResponseWriter, r *http.Request) {
 		PageSize:  pageSize,
 	}
 
+	log.Printf("操作日志查询: userID=%d, startDate=%s, endDate=%s, module=%s, action=%s",
+		userID, req.StartDate, req.EndDate, req.Module, req.Action)
+
 	logs, total, err := oplogService.ListLogs(userID, req)
 	if err != nil {
 		jsonError(w, err.Error(), http.StatusInternalServerError)
