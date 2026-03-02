@@ -270,7 +270,15 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), "userID", userID)
+		// 获取用户名
+		user, _ := authService.GetUserByID(userID)
+		username := ""
+		if user != nil {
+			username = user.Username
+		}
+
+		ctx := context.WithValue(r.Context(), "user_id", userID)
+		ctx = context.WithValue(ctx, "username", username)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	}
 }
@@ -291,7 +299,7 @@ func jsonError(w http.ResponseWriter, message string, code int) {
 }
 
 func getUserID(r *http.Request) int64 {
-	return r.Context().Value("userID").(int64)
+	return r.Context().Value("user_id").(int64)
 }
 
 // 健康检查
