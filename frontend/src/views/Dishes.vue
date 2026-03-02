@@ -330,10 +330,10 @@ function formatLogValue(type, value) {
 
 function formatTime(timeStr) {
   if (!timeStr) return ''
-  // 处理 "2006-01-02 15:04:05" 格式，替换空格为T以便正确解析
+  // 处理 "2006-01-02 15:04:05" 格式，直接解析为本地时间
   let dateStr = timeStr
   if (timeStr.includes(' ') && !timeStr.includes('T')) {
-    dateStr = timeStr.replace(' ', 'T') + '+08:00'  // 假设服务器时区为东八区
+    dateStr = timeStr.replace(' ', 'T')
   }
   const date = new Date(dateStr)
   const m = String(date.getMonth() + 1).padStart(2, '0')
