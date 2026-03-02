@@ -64,10 +64,13 @@ func (s *OperationLogService) Log(entry LogEntry) error {
 		}
 	}
 
+	// 使用标准格式存储时间，便于日期筛选
+	now := time.Now().Format("2006-01-02 15:04:05")
+
 	_, err := database.DB.Exec(`
 		INSERT INTO operation_logs (user_id, username, module, action, target_id, target_name, description, old_value, new_value, ip, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, entry.UserID, entry.Username, entry.Module, entry.Action, entry.TargetID, entry.TargetName, entry.Description, oldValueJSON, newValueJSON, entry.IP, time.Now())
+	`, entry.UserID, entry.Username, entry.Module, entry.Action, entry.TargetID, entry.TargetName, entry.Description, oldValueJSON, newValueJSON, entry.IP, now)
 
 	return err
 }
